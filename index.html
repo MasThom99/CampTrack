@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CampTrack - Sistem Peminjaman Alat Kemping</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+  
+  <link rel="stylesheet" href="style.css">
+
+  <style>
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .spinner-loader {
+      width: 45px; height: 45px; border: 4px solid #e2ede5;
+      border-top-color: #2d6a4f; border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="global-loader" style="display:none; position:fixed; inset:0; background:rgba(255,255,255,0.85); z-index:9999; align-items:center; justify-content:center; flex-direction:column; gap:1rem; backdrop-filter: blur(5px);">
+    <div class="spinner-loader"></div>
+    <span style="font-family:'Syne',sans-serif;font-weight:600;color:#1a3a2a;font-size:16px;">Memuat data...</span>
+  </div>
+
+  <div id="login-page">
+    <div class="login-bg-icons">
+      <i class="ti ti-tent" style="top:10%;left:5%;transform:rotate(-15deg)"></i>
+      <i class="ti ti-backpack" style="top:60%;right:5%;transform:rotate(10deg)"></i>
+      <i class="ti ti-campfire" style="bottom:10%;left:30%;transform:rotate(-5deg)"></i>
+      <i class="ti ti-mountain" style="top:30%;right:20%;transform:rotate(8deg)"></i>
+      <i class="ti ti-compass" style="bottom:25%;right:40%;transform:rotate(-12deg)"></i>
+    </div>
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="login-logo-icon"><i class="ti ti-tent" aria-hidden="true"></i></div>
+        <div class="login-logo-text">
+          <span>CampTrack</span>
+          <small>Sistem Peminjaman Alat Kemping</small>
+        </div>
+      </div>
+      <h2>Selamat datang!</h2>
+      <p>Masuk untuk mengelola inventaris alat kemping</p>
+      <div class="form-group">
+        <label for="login-user">Username</label>
+        <input type="text" id="login-user" value="admin" placeholder="Masukkan username">
+      </div>
+      <div class="form-group">
+        <label for="login-pass">Password</label>
+        <input type="password" id="login-pass" value="admin123" placeholder="Masukkan password">
+      </div>
+      <button class="btn-login" onclick="doLogin()">
+        <i class="ti ti-login" aria-hidden="true"></i> Masuk ke Dashboard
+      </button>
+      <p class="login-hint">Demo: username <b>admin</b> / password <b>admin123</b></p>
+    </div>
+  </div>
+
+  <div id="app">
+    <div class="topbar">
+      <div class="topbar-brand">
+        <i class="ti ti-tent" aria-hidden="true"></i>
+        CampTrack
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-user">
+          <div class="topbar-avatar">A</div>
+          <span>Admin</span>
+        </div>
+        <button class="btn-logout" onclick="doLogout()">
+          <i class="ti ti-logout" aria-hidden="true"></i> Keluar
+        </button>
+      </div>
+    </div>
+
+    <div class="main-layout">
+      <nav class="sidebar" role="navigation" aria-label="Menu navigasi">
+        <div class="nav-section">Menu Utama</div>
+        <div class="nav-item active" onclick="nav('dashboard')" id="nav-dashboard">
+          <i class="ti ti-layout-dashboard" aria-hidden="true"></i> Dashboard
+        </div>
+        <div class="nav-section">Manajemen</div>
+        <div class="nav-item" onclick="nav('aset')" id="nav-aset">
+          <i class="ti ti-backpack" aria-hidden="true"></i> Data Aset
+        </div>
+        <div class="nav-item" onclick="nav('pinjam')" id="nav-pinjam">
+          <i class="ti ti-arrow-bar-to-right" aria-hidden="true"></i> Peminjaman
+        </div>
+        <div class="nav-item" onclick="nav('kembali')" id="nav-kembali">
+          <i class="ti ti-arrow-bar-to-left" aria-hidden="true"></i> Pengembalian
+        </div>
+        <div class="nav-section">Laporan</div>
+        <div class="nav-item" onclick="nav('riwayat')" id="nav-riwayat">
+          <i class="ti ti-history" aria-hidden="true"></i> Riwayat
+        </div>
+        <div class="nav-item" onclick="nav('qr')" id="nav-qr">
+          <i class="ti ti-qrcode" aria-hidden="true"></i> QR Pembayaran
+        </div>
+      </nav>
+
+      <main class="content">
+
+        <div class="page active" id="page-dashboard">
+          <h2 class="sr-only">Dashboard sistem peminjaman alat kemping</h2>
+          <div class="profile-banner">
+            <div class="company-name">🏕️ CampTrack — Rental Alat Kemping</div>
+            <div class="company-tag">Jl. Gunung Slamet No. 42, Purwokerto, Jawa Tengah · (0281) 555-8890</div>
+            <div class="company-badges">
+              <span class="badge-pill"><i class="ti ti-certificate" aria-hidden="true"></i> Terdaftar Resmi</span>
+              <span class="badge-pill"><i class="ti ti-clock-24" aria-hidden="true"></i> Buka 08.00–21.00</span>
+              <span class="badge-pill"><i class="ti ti-shield-check" aria-hidden="true"></i> Barang Terjamin</span>
+              <span class="badge-pill"><i class="ti ti-star-filled" aria-hidden="true"></i> 4.9 Rating</span>
+            </div>
+          </div>
+
+          <div class="stat-grid">
+            <div class="stat-card success">
+              <div class="label">Total Aset</div>
+              <div class="value" id="s-total">0</div>
+              <div class="trend"><i class="ti ti-package" aria-hidden="true"></i> Semua barang</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Tersedia</div>
+              <div class="value" id="s-avail">0</div>
+              <div class="trend" style="color:var(--c3)"><i class="ti ti-circle-check" aria-hidden="true"></i> Siap dipinjam</div>
+            </div>
+            <div class="stat-card accent">
+              <div class="label">Sedang Dipinjam</div>
+              <div class="value" id="s-borrowed">0</div>
+              <div class="trend" style="color:var(--acc)"><i class="ti ti-clock" aria-hidden="true"></i> Aktif</div>
+            </div>
+            <div class="stat-card danger">
+              <div class="label">Rusak</div>
+              <div class="value" id="s-damaged">0</div>
+              <div class="trend" style="color:#e63946"><i class="ti ti-alert-triangle" aria-hidden="true"></i> Perlu perbaikan</div>
+            </div>
+            <div class="stat-card warn">
+              <div class="label">Total Transaksi</div>
+              <div class="value" id="s-trans">0</div>
+              <div class="trend" style="color:#8c6300"><i class="ti ti-receipt" aria-hidden="true"></i> Peminjaman</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+              <h3 style="font-size:16px;color:var(--c1)"><i class="ti ti-activity" aria-hidden="true" style="color:var(--c3)"></i> Aktivitas Terbaru</h3>
+              <button class="btn btn-sm btn-outline" onclick="nav('riwayat')"><i class="ti ti-external-link" aria-hidden="true"></i> Lihat semua</button>
+            </div>
+            <div class="table-wrap">
+              <table id="recent-table">
+                <thead><tr><th>Peminjam</th><th>Barang</th><th>Tanggal Pinjam</th><th>Status</th></tr></thead>
+                <tbody id="recent-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="page" id="page-aset">
+          <div class="page-header">
+            <div>
+              <h2 class="page-title"><i class="ti ti-backpack" aria-hidden="true" style="color:var(--c3)"></i> Data Aset</h2>
+              <div class="page-sub">Kelola inventaris alat kemping</div>
+            </div>
+            <button class="btn btn-primary" onclick="openModal('modal-aset')"><i class="ti ti-plus" aria-hidden="true"></i> Tambah Aset</button>
+          </div>
+          <div class="search-bar">
+            <input type="text" class="search-input" placeholder="Cari nama barang..." id="search-aset" oninput="renderAset()">
+            <select class="filter-sel" id="filter-kat" onchange="renderAset()">
+              <option value="">Semua Kategori</option>
+              <option>Tenda & Bivak</option>
+              <option>Perlengkapan Tidur</option>
+              <option>Masak & Makan</option>
+              <option>Navigasi & Pencahayaan</option>
+              <option>Pakaian & Footwear</option>
+              <option>Aksesoris</option>
+            </select>
+            <select class="filter-sel" id="filter-stat" onchange="renderAset()">
+              <option value="">Semua Status</option>
+              <option value="Tersedia">Tersedia</option>
+              <option value="Dipinjam">Dipinjam</option>
+              <option value="Rusak">Rusak</option>
+            </select>
+          </div>
+          <div class="card">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Foto</th><th>Kode</th><th>Nama Barang</th><th>Kategori</th><th>Tarif/Hari</th><th>Status</th><th>Aksi</th></tr></thead>
+                <tbody id="aset-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="page" id="page-pinjam">
+          <div class="page-header">
+            <div>
+              <h2 class="page-title"><i class="ti ti-arrow-bar-to-right" aria-hidden="true" style="color:var(--c3)"></i> Peminjaman (Check-out)</h2>
+              <div class="page-sub">Catat peminjaman alat kemping baru</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+            <div class="card">
+              <h3 style="font-size:16px;margin-bottom:1.25rem;color:var(--c1)">Form Peminjaman Baru</h3>
+              <div class="form-row single">
+                <div class="fg">
+                  <label for="p-nama">Nama Peminjam</label>
+                  <input type="text" id="p-nama" placeholder="Nama lengkap peminjam">
+                </div>
+              </div>
+              <div class="form-row single">
+                <div class="fg">
+                  <label for="p-hp">No. HP / Kontak</label>
+                  <input type="tel" id="p-hp" placeholder="08xxxxxxxxxx">
+                </div>
+              </div>
+              <div class="form-row single">
+                <div class="fg">
+                  <label for="p-barang">Pilih Barang (Tersedia)</label>
+                  <select id="p-barang">
+                    <option value="">-- Pilih barang --</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="fg">
+                  <label for="p-tgl-pinjam">Tanggal Pinjam</label>
+                  <input type="date" id="p-tgl-pinjam">
+                </div>
+                <div class="fg">
+                  <label for="p-tgl-kembali">Tanggal Kembali</label>
+                  <input type="date" id="p-tgl-kembali">
+                </div>
+              </div>
+              <div class="form-row single">
+                <div class="fg">
+                  <label for="p-catatan">Catatan</label>
+                  <textarea id="p-catatan" rows="2" placeholder="Kondisi barang saat dipinjam..."></textarea>
+                </div>
+              </div>
+              <div style="background:var(--c5);border-radius:var(--rad2);padding:1rem;margin-bottom:1rem">
+                <div id="p-estimasi" style="font-size:13px;color:var(--muted)">Pilih barang dan tanggal untuk melihat estimasi biaya</div>
+              </div>
+              <button class="btn btn-primary" style="width:100%" onclick="doPinjam()"><i class="ti ti-arrow-bar-to-right" aria-hidden="true"></i> Proses Peminjaman</button>
+            </div>
+            <div class="card">
+              <h3 style="font-size:16px;margin-bottom:1.25rem;color:var(--c1)">Peminjaman Aktif</h3>
+              <div id="active-loans"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="page" id="page-kembali">
+          <div class="page-header">
+            <div>
+              <h2 class="page-title"><i class="ti ti-arrow-bar-to-left" aria-hidden="true" style="color:var(--c3)"></i> Pengembalian (Check-in)</h2>
+              <div class="page-sub">Proses pengembalian barang dan hitung denda</div>
+            </div>
+          </div>
+          <div class="card">
+            <h3 style="font-size:15px;margin-bottom:1rem;color:var(--c1)">Daftar Peminjaman Aktif</h3>
+            <div id="return-list"></div>
+          </div>
+        </div>
+
+        <div class="page" id="page-riwayat">
+          <div class="page-header">
+            <div>
+              <h2 class="page-title"><i class="ti ti-history" aria-hidden="true" style="color:var(--c3)"></i> Riwayat Peminjaman</h2>
+              <div class="page-sub">Rekap lengkap semua transaksi</div>
+            </div>
+          </div>
+          <div class="search-bar">
+            <input type="text" class="search-input" placeholder="Cari nama peminjam atau barang..." id="search-riwayat" oninput="renderRiwayat()">
+            <select class="filter-sel" id="filter-riwayat" onchange="renderRiwayat()">
+              <option value="">Semua Status</option>
+              <option value="Dipinjam">Dipinjam</option>
+              <option value="Dikembalikan">Dikembalikan</option>
+              <option value="Terlambat">Terlambat</option>
+            </select>
+          </div>
+          <div class="card">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>#</th><th>Peminjam</th><th>Barang</th><th>Tgl Pinjam</th><th>Tgl Kembali</th><th>Tgl Aktual</th><th>Biaya</th><th>Denda</th><th>Status</th></tr></thead>
+                <tbody id="riwayat-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="page" id="page-qr">
+          <div class="page-header">
+            <div>
+              <h2 class="page-title"><i class="ti ti-qrcode" aria-hidden="true" style="color:var(--c3)"></i> QR Pembayaran</h2>
+              <div class="page-sub">Media pembayaran digital untuk transaksi sewa</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start">
+            <div class="card">
+              <h3 style="font-size:15px;margin-bottom:1.25rem;color:var(--c1)">Pilih Metode Pembayaran</h3>
+              <div class="payment-methods">
+                <div class="pay-card active" onclick="selectPay('QRIS',this)">
+                  <i class="ti ti-qrcode" aria-hidden="true"></i>
+                  <span>QRIS</span>
+                </div>
+                <div class="pay-card" onclick="selectPay('GoPay',this)">
+                  <i class="ti ti-brand-google-pay" aria-hidden="true"></i>
+                  <span>GoPay</span>
+                </div>
+                <div class="pay-card" onclick="selectPay('OVO',this)">
+                  <i class="ti ti-wallet" aria-hidden="true"></i>
+                  <span>OVO</span>
+                </div>
+                <div class="pay-card" onclick="selectPay('Dana',this)">
+                  <i class="ti ti-credit-card" aria-hidden="true"></i>
+                  <span>DANA</span>
+                </div>
+                <div class="pay-card" onclick="selectPay('BCA',this)">
+                  <i class="ti ti-building-bank" aria-hidden="true"></i>
+                  <span>Transfer</span>
+                </div>
+                <div class="pay-card" onclick="selectPay('Tunai',this)">
+                  <i class="ti ti-cash" aria-hidden="true"></i>
+                  <span>Tunai</span>
+                </div>
+              </div>
+              <div style="margin-top:1.5rem">
+                <div class="fg" style="margin-bottom:.75rem">
+                  <label for="qr-trans">Pilih Transaksi (Aktif)</label>
+                  <select id="qr-trans" onchange="updateQR()">
+                    <option value="">-- Pilih peminjaman --</option>
+                  </select>
+                </div>
+                <div id="qr-amount" style="background:var(--c5);border-radius:var(--rad2);padding:.875rem;font-size:14px;color:var(--muted)">Pilih transaksi untuk melihat total tagihan</div>
+              </div>
+            </div>
+            <div class="card" style="text-align:center">
+              <h3 style="font-size:15px;margin-bottom:1.25rem;color:var(--c1)">Scan untuk Membayar</h3>
+              <div class="qr-container">
+                <div class="qr-box">
+                  <svg class="qr-svg" id="qr-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"></svg>
+                  <div class="qr-label" id="qr-label">CAMPTRACK · QRIS</div>
+                </div>
+                <div id="qr-total" style="font-family:'Syne',sans-serif;font-size:26px;font-weight:700;color:var(--c1)">Rp 0</div>
+                <div id="qr-info" style="font-size:13px;color:var(--muted);text-align:center">Pilih transaksi terlebih dahulu</div>
+                <button class="btn btn-primary" onclick="markPaid()"><i class="ti ti-check" aria-hidden="true"></i> Konfirmasi Pembayaran</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-aset" style="display:none">
+    <div class="modal">
+      <h3 id="modal-aset-title">Tambah Aset Baru</h3>
+      <input type="hidden" id="edit-id">
+      <div class="form-row">
+        <div class="fg">
+          <label for="a-kode">Kode Barang</label>
+          <input type="text" id="a-kode" placeholder="CTK-001">
+        </div>
+        <div class="fg">
+          <label for="a-kat">Kategori</label>
+          <select id="a-kat">
+            <option>Tenda & Bivak</option>
+            <option>Perlengkapan Tidur</option>
+            <option>Masak & Makan</option>
+            <option>Navigasi & Pencahayaan</option>
+            <option>Pakaian & Footwear</option>
+            <option>Aksesoris</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row single">
+        <div class="fg">
+          <label for="a-nama">Nama Barang</label>
+          <input type="text" id="a-nama" placeholder="Contoh: Tenda Dome 4 Orang">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="fg">
+          <label for="a-tarif">Tarif per Hari (Rp)</label>
+          <input type="number" id="a-tarif" placeholder="50000">
+        </div>
+        <div class="fg">
+          <label for="a-status">Status</label>
+          <select id="a-status">
+            <option>Tersedia</option>
+            <option>Dipinjam</option>
+            <option>Rusak</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row single">
+        <div class="fg">
+          <label for="a-foto">Foto (emoji / deskripsi singkat)</label>
+          <input type="text" id="a-foto" placeholder="🏕️ atau deskripsikan barang">
+        </div>
+      </div>
+      <div class="form-row single">
+        <div class="fg">
+          <label for="a-desc">Deskripsi</label>
+          <textarea id="a-desc" rows="2" placeholder="Kondisi, spesifikasi, catatan..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal('modal-aset')">Batal</button>
+        <button class="btn btn-primary" onclick="saveAset()"><i class="ti ti-device-floppy" aria-hidden="true"></i> Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-return" style="display:none">
+    <div class="modal">
+      <h3>Konfirmasi Pengembalian</h3>
+      <input type="hidden" id="ret-id">
+      <div id="ret-info" style="margin-bottom:1.25rem"></div>
+      <div class="fg" style="margin-bottom:1rem">
+        <label for="ret-tgl">Tanggal Pengembalian Aktual</label>
+        <input type="datetime-local" id="ret-tgl">
+      </div>
+      <div class="fg" style="margin-bottom:1rem">
+        <label for="ret-kondisi">Kondisi Barang</label>
+        <select id="ret-kondisi">
+          <option value="Baik">Baik — dikembalikan normal</option>
+          <option value="Rusak">Rusak — perlu perbaikan</option>
+        </select>
+      </div>
+      <div id="ret-denda-box" style="display:none;margin-bottom:1rem"></div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal('modal-return')">Batal</button>
+        <button class="btn btn-primary" onclick="saveReturn()"><i class="ti ti-check" aria-hidden="true"></i> Konfirmasi Kembali</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+
+</body>
+</html>
