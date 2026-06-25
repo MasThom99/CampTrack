@@ -55,7 +55,7 @@ async function loadInitialData() {
     loans = allTransactions.filter(t => t.status === 'Dipinjam');
     history = allTransactions.filter(t => t.status !== 'Dipinjam');
     
-    renderDashboard(); renderAset(); renderPinjam(); renderKembali(); renderRiwayat();
+    renderDashboard(); renderAset(); renderPinjam(); renderKembali(); renderRiwayat(); renderQROptions();
   }
 }
 
@@ -180,21 +180,23 @@ function editAset(id){
   openModal('modal-aset');
 }
 
-// --- SIMPAN ASET BARU (CREATE) ---
+// --- SIMPAN ASET (MENDUKUNG CREATE & UPDATE) ---
 async function saveAset(){
   const kode = document.getElementById('a-kode').value.trim();
   const nama = document.getElementById('a-nama').value.trim();
   const tarif = parseInt(document.getElementById('a-tarif').value) || 0;
   
-  // Validasi agar field wajib tidak kosong
   if(!kode || !nama || !tarif){
     alert('Lengkapi field Kode, Nama, dan Tarif!');
     return;
   }
 
-  // Bungkus data dari form ke dalam objek payload
+  // Cek apakah variabel global currentEditId berisi ID (berarti mode EDIT) atau null (berarti TAMBAH BARU)
+  const isEdit = currentEditId !== null;
+  
   const payload = {
-    action: "tambah_aset",
+    action: isEdit ? "edit_aset" : "tambah_aset",
+    id: currentEditId, // Mengirimkan ID lama jika mode edit
     data: {
       kode: kode,
       nama: nama,
@@ -206,32 +208,66 @@ async function saveAset(){
     }
   };
 
-  // Munculkan layar loading
   document.getElementById('global-loader').style.display = 'flex';
 
   try {
-    // Kirim data ke Google Apps Script menggunakan POST
     const response = await fetch(API_URL, {
       method: "POST",
-      // Gunakan text/plain agar tidak terkena blokir CORS Preflight dari browser
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      redirect: "follow"
     });
 
     const result = await response.json();
 
     if (result.status === "success") {
       closeModal('modal-aset');
-      alert('✅ Barang baru berhasil ditambahkan ke database!');
-      
-      // Minta peladen untuk menarik data terbaru agar tabel langsung ter-update
+      alert('✅ ' + result.message);
+      // Sinkronisasi ulang data frontend dengan database terbaru
       await loadInitialData(); 
     } else {
-      alert('❌ Gagal menyimpan data: ' + result.message);
+      alert('❌ Gagal: ' + result.message);
     }
   } catch (error) {
     console.error("Post Error:", error);
-    alert('Terjadi kesalahan saat mengirim data ke server.');
+    alert('Terjadi kesalahan jaringan saat menyimpan data.');
+  } finally {
+    document.getElementById('global-loader').style.display = 'none';
+  }
+}
+
+// --- HAPUS ASET (DELETE) ---
+async function deleteAset(id){
+  // Definisikan dialog konfirmasi demi integritas data
+  if(!confirm('Apakah Anda yakin ingin menghapus aset ini dari database secara permanen?')) return;
+  
+  const payload = {
+    action: "hapus_aset",
+    id: id
+  };
+
+  document.getElementById('global-loader').style.display = 'flex';
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+      redirect: "follow"
+    });
+
+    const result = await response.json();
+
+    if (result.status === "success") {
+      alert('✅ ' + result.message);
+      // Tarik ulang data terbaru pasca eliminasi baris database
+      await loadInitialData(); 
+    } else {
+      alert('❌ Gagal menghapus: ' + result.message);
+    }
+  } catch (error) {
+    console.error("Delete Error:", error);
+    alert('Terjadi kesalahan jaringan saat menghapus data.');
   } finally {
     document.getElementById('global-loader').style.display = 'none';
   }
@@ -271,27 +307,78 @@ function updateEstimasi(){
   </div>`;
 }
 
-function doPinjam(){
-  const nama=document.getElementById('p-nama').value.trim();
-  const hp=document.getElementById('p-hp').value.trim();
-  const asetId=parseInt(document.getElementById('p-barang').value);
-  const t1=document.getElementById('p-tgl-pinjam').value;
-  const t2=document.getElementById('p-tgl-kembali').value;
-  const catatan=document.getElementById('p-catatan').value;
-  if(!nama||!hp||!asetId||!t1||!t2){alert('Lengkapi semua field!');return;}
-  if(new Date(t2)<=new Date(t1)){alert('Tanggal kembali harus setelah tanggal pinjam!');return;}
-  const days=Math.ceil((new Date(t2)-new Date(t1))/(1000*3600*24));
-  const aset=assets.find(a=>a.id===asetId);
-  aset.status='Dipinjam';
-  loans.push({id:nextLoanId++,nama,hp,asetId,tglPinjam:t1,tglKembali:t2,tglAktual:null,biaya:days*aset.tarif,denda:0,kondisi:null,status:'Dipinjam',catatan});
-  document.getElementById('p-nama').value='';
-  document.getElementById('p-hp').value='';
-  document.getElementById('p-barang').value='';
-  document.getElementById('p-tgl-kembali').value='';
-  document.getElementById('p-catatan').value='';
-  document.getElementById('p-estimasi').innerHTML='<span style="color:var(--muted)">Pilih barang dan tanggal untuk melihat estimasi biaya</span>';
-  renderPinjam();
-  alert('✅ Peminjaman berhasil dicatat!');
+// --- PROSES PEMINJAMAN (CREATE TRANSACTION) ---
+async function doPinjam(){
+  const nama = document.getElementById('p-nama').value.trim();
+  const hp = document.getElementById('p-hp').value.trim();
+  const asetId = parseInt(document.getElementById('p-barang').value);
+  const t1 = document.getElementById('p-tgl-pinjam').value;
+  const t2 = document.getElementById('p-tgl-kembali').value;
+  const catatan = document.getElementById('p-catatan').value;
+  
+  // Validasi Input
+  if(!nama || !hp || !asetId || !t1 || !t2){
+    alert('Lengkapi semua field form peminjaman!');
+    return;
+  }
+  if(new Date(t2) <= new Date(t1)){
+    alert('Tanggal kembali harus setelah tanggal pinjam!');
+    return;
+  }
+  
+  // Hitung total biaya di frontend
+  const aset = assets.find(a => a.id === asetId);
+  const days = Math.ceil((new Date(t2) - new Date(t1)) / (1000 * 3600 * 24));
+  const totalBiaya = days * aset.tarif;
+  
+  // Bungkus data untuk dikirim ke server
+  const payload = {
+    action: "tambah_peminjaman",
+    data: {
+      nama: nama,
+      hp: hp,
+      asetId: asetId,
+      tglPinjam: t1,
+      tglKembali: t2,
+      biaya: totalBiaya,
+      catatan: catatan
+    }
+  };
+  
+  document.getElementById('global-loader').style.display = 'flex';
+  
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+      redirect: "follow"
+    });
+    
+    const result = await response.json();
+    
+    if(result.status === "success") {
+      alert('✅ ' + result.message);
+      
+      // Kosongkan form kembali seperti semula
+      document.getElementById('p-nama').value = '';
+      document.getElementById('p-hp').value = '';
+      document.getElementById('p-barang').value = '';
+      document.getElementById('p-tgl-kembali').value = '';
+      document.getElementById('p-catatan').value = '';
+      document.getElementById('p-estimasi').innerHTML = '<span style="color:var(--muted)">Pilih barang dan tanggal untuk melihat estimasi biaya</span>';
+      
+      // Trik Sakti: Panggil ulang data dari database agar layar tersinkronisasi otomatis
+      await loadInitialData();
+    } else {
+      alert('❌ Gagal memproses peminjaman: ' + result.message);
+    }
+  } catch (error) {
+    console.error("Tx Error:", error);
+    alert('Terjadi kesalahan jaringan saat mengirim transaksi.');
+  } finally {
+    document.getElementById('global-loader').style.display = 'none';
+  }
 }
 
 function renderActiveLoans(){
@@ -316,13 +403,15 @@ function renderActiveLoans(){
 }
 
 // PENGEMBALIAN
+// --- PENGEMBALIAN ---
 function renderKembali(){
   const el=document.getElementById('return-list');
   if(loans.length===0){el.innerHTML='<div class="empty-state"><i class="ti ti-package-off" aria-hidden="true"></i>Tidak ada peminjaman aktif untuk dikembalikan</div>';return;}
   el.innerHTML=`<div class="table-wrap"><table>
     <thead><tr><th>Peminjam</th><th>Barang</th><th>Tgl Pinjam</th><th>Batas Kembali</th><th>Biaya</th><th>Status</th><th>Aksi</th></tr></thead>
     <tbody>${loans.map(l=>{
-      const a=assets.find(x=>x.id===l.asetId)||{nama:'?',foto:'📦'};
+      // Diperbaiki: Menggunakan String() agar kebal terhadap bentrok tipe data
+      const a=assets.find(x=>String(x.id)===String(l.asetId))||{nama:'?',foto:'📦'};
       const over=new Date()>new Date(l.tglKembali);
       const sc=over?'overdue':'borrowed';
       const sl=over?'Terlambat!':'Aktif';
@@ -333,18 +422,22 @@ function renderKembali(){
         <td style="color:${over?'#e63946':'inherit'}">${fmtDate(l.tglKembali)}</td>
         <td>${idr(l.biaya)}</td>
         <td><span class="badge ${sc}">${sl}</span></td>
-        <td><button class="btn btn-sm btn-acc" onclick="openReturn(${l.id})"><i class="ti ti-arrow-bar-to-left" aria-hidden="true"></i> Kembalikan</button></td>
+        <td><button class="btn btn-sm btn-acc" onclick="openReturn('${l.id}')"><i class="ti ti-arrow-bar-to-left" aria-hidden="true"></i> Kembalikan</button></td>
       </tr>`;
     }).join('')}</tbody>
   </table></div>`;
 }
 
 function openReturn(id){
-  const l=loans.find(x=>x.id===id); if(!l)return;
-  const a=assets.find(x=>x.id===l.asetId)||{nama:'?',foto:'📦',tarif:0};
+  // Diperbaiki: Ubah semua id jadi String agar cocok
+  const l=loans.find(x=>String(x.id)===String(id)); 
+  if(!l) return;
+  const a=assets.find(x=>String(x.id)===String(l.asetId))||{nama:'?',foto:'📦',tarif:0};
+  
   document.getElementById('ret-id').value=id;
   document.getElementById('ret-tgl').value=nowDT();
   document.getElementById('ret-kondisi').value='Baik';
+  
   const over=new Date()>new Date(l.tglKembali);
   document.getElementById('ret-info').innerHTML=`
     <div class="card" style="background:var(--c5);border:none;margin-bottom:0">
@@ -353,21 +446,30 @@ function openReturn(id){
       <div class="info-row"><i class="ti ti-calendar" aria-hidden="true"></i>Batas kembali: <b style="color:${over?'#e63946':'var(--c2)'}">${fmtDate(l.tglKembali)}</b></div>
       <div class="info-row"><i class="ti ti-receipt" aria-hidden="true"></i>Biaya sewa: <b>${idr(l.biaya)}</b></div>
     </div>`;
+  
   document.getElementById('ret-denda-box').style.display='none';
   document.getElementById('ret-tgl').onchange=calcDenda;
   openModal('modal-return');
   calcDenda();
 }
 
+// --- FUNGSI KALKULASI DENDA (DIPERBAIKI) ---
 function calcDenda(){
-  const id=parseInt(document.getElementById('ret-id').value);
-  const l=loans.find(x=>x.id===id); if(!l)return;
+  const id=document.getElementById('ret-id').value;
+  const l=loans.find(x=>String(x.id)===String(id)); 
+  if(!l) return;
+  
   const retDT=new Date(document.getElementById('ret-tgl').value);
-  const batas=new Date(l.tglKembali+'T23:59:59');
+  
+  // DIPERBAIKI: Menggunakan setter kalender asli, bukan tempel teks
+  const batas = new Date(l.tglKembali);
+  batas.setHours(23, 59, 59, 999); 
+  
   const box=document.getElementById('ret-denda-box');
-  if(retDT>batas){
-    const hours=Math.ceil((retDT-batas)/(1000*3600));
-    const denda=hours*5000;
+  
+  if(retDT > batas){
+    const hours = Math.ceil((retDT - batas) / (1000 * 3600));
+    const denda = hours * 5000;
     box.style.display='block';
     box.innerHTML=`<div class="denda-badge"><i class="ti ti-clock-exclamation" aria-hidden="true"></i>
       Terlambat <b>${hours} jam</b> · Denda: <b>${idr(denda)}</b> (Rp 5.000/jam)
@@ -377,29 +479,68 @@ function calcDenda(){
   }
 }
 
-function saveReturn(){
-  const id=parseInt(document.getElementById('ret-id').value);
-  const idx=loans.findIndex(x=>x.id===id); if(idx<0)return;
-  const l=loans[idx];
-  const retDT=new Date(document.getElementById('ret-tgl').value);
-  const batas=new Date(l.tglKembali+'T23:59:59');
-  const kondisi=document.getElementById('ret-kondisi').value;
-  let denda=0;
-  let terlambat=false;
-  if(retDT>batas){
-    const hours=Math.ceil((retDT-batas)/(1000*3600));
-    denda=hours*5000;
-    terlambat=true;
+// --- FUNGSI SIMPAN PENGEMBALIAN (DIPERBAIKI) ---
+async function saveReturn(){
+  const id = document.getElementById('ret-id').value;
+  const l = loans.find(x => String(x.id) === String(id)); 
+  if(!l) return;
+
+  const retDT = new Date(document.getElementById('ret-tgl').value);
+  
+  // DIPERBAIKI JAGA DI SINI
+  const batas = new Date(l.tglKembali);
+  batas.setHours(23, 59, 59, 999);
+  
+  const kondisi = document.getElementById('ret-kondisi').value;
+  
+  let denda = 0;
+  let terlambat = false;
+  if(retDT > batas){
+    const hours = Math.ceil((retDT - batas) / (1000 * 3600));
+    denda = hours * 5000;
+    terlambat = true;
   }
-  const status=terlambat?'Terlambat':'Dikembalikan';
-  history.push({...l, id:'H'+String(nextHistId++).padStart(3,'0'), tglAktual:document.getElementById('ret-tgl').value, denda, kondisi, status});
-  const aset=assets.find(a=>a.id===l.asetId);
-  if(aset) aset.status=kondisi==='Rusak'?'Rusak':'Tersedia';
-  loans.splice(idx,1);
-  closeModal('modal-return');
-  renderKembali();
-  const msg=denda>0?`✅ Barang dikembalikan.\n⚠️ Denda keterlambatan: ${idr(denda)}`:'✅ Barang berhasil dikembalikan tepat waktu!';
-  alert(msg);
+  
+  const statusTx = terlambat ? 'Terlambat' : 'Dikembalikan';
+  
+  const payload = {
+    action: "proses_pengembalian",
+    data: {
+      idTransaksi: l.id,
+      idAset: l.asetId,
+      tglAktual: document.getElementById('ret-tgl').value,
+      denda: denda,
+      kondisi: kondisi,
+      status: statusTx
+    }
+  };
+
+  document.getElementById('global-loader').style.display = 'flex';
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+      redirect: "follow"
+    });
+
+    const result = await response.json();
+
+    if (result.status === "success") {
+      closeModal('modal-return');
+      const msg = denda > 0 ? `✅ Barang dikembalikan.\n⚠️ Denda keterlambatan: ${idr(denda)}` : '✅ Barang berhasil dikembalikan tepat waktu!';
+      alert(msg);
+      await loadInitialData();
+    } else {
+      alert('❌ Gagal memproses pengembalian: ' + result.message);
+    }
+  } catch (error) {
+    console.error("Return Error:", error);
+    alert('Terjadi kesalahan jaringan saat memproses pengembalian.');
+  } finally {
+    document.getElementById('global-loader').style.display = 'none';
+  }
 }
 
 // RIWAYAT
@@ -440,43 +581,104 @@ function selectPay(name, el){
   generateQR();
 }
 
-function renderQR(){
-  const sel=document.getElementById('qr-trans');
-  sel.innerHTML='<option value="">-- Pilih peminjaman --</option>';
-  [...loans,...history].forEach(t=>{
-    const a=assets.find(x=>x.id===t.asetId)||{nama:'?'};
-    const opt=document.createElement('option');
-    opt.value=t.id;
-    opt.textContent=`${t.nama} · ${a.nama} · ${idr(t.biaya+(t.denda||0))}`;
-    sel.appendChild(opt);
+// --- RENDER DROPDOWN QR (TAMPILAN LEBIH CANTIK) ---
+function renderQROptions() {
+  const select = document.getElementById('qr-trans');
+  if (!select) return;
+
+  // Deteksi nama penampung data
+  let dataTx = typeof allTransactions !== 'undefined' ? allTransactions : (typeof transactions !== 'undefined' ? transactions : (typeof loans !== 'undefined' ? loans : []));
+
+  // Saring transaksi yang belum lunas
+  const unpaidTx = dataTx.filter(tx => {
+    const statusPay = tx.status_pembayaran || tx.statusPembayaran || '';
+    return statusPay.toLowerCase() !== 'lunas';
   });
-  generateQR();
-  sel.onchange=updateQR;
+
+  if (unpaidTx.length === 0) {
+    select.innerHTML = '<option value="">-- Tidak ada tagihan menunggak --</option>';
+  } else {
+    select.innerHTML = '<option value="">-- Pilih peminjaman --</option>' + unpaidTx.map(tx => {
+      const txId = tx.id || tx.id_transaksi || tx.idTransaksi;
+      const txNama = tx.nama || tx.nama_peminjam || tx.namaPeminjam || 'Tanpa Nama';
+      
+      // Cari nama barang agar dropdown tampil elegan
+      const a = assets.find(x => String(x.id) === String(tx.asetId)) || {nama: 'Barang'};
+      
+      // Hasilnya misal: "Agus — Kompor Portable"
+      return `<option value="${txId}">${txNama} — ${a.nama}</option>`;
+    }).join('');
+  }
+  
+  document.getElementById('qr-amount').innerHTML = 'Pilih transaksi untuk melihat total tagihan';
+  document.getElementById('qr-total').innerText = 'Rp 0';
+  document.getElementById('qr-info').innerText = 'Pilih transaksi terlebih dahulu';
+  document.getElementById('qr-svg').innerHTML = '';
 }
 
-function updateQR(){
-  const id=document.getElementById('qr-trans').value;
-  const allTx=[...loans,...history];
-  const t=allTx.find(x=>String(x.id)===String(id));
-  const amEl=document.getElementById('qr-amount');
-  const totEl=document.getElementById('qr-total');
-  const infoEl=document.getElementById('qr-info');
-  if(!t){
-    amEl.innerHTML='<span style="color:var(--muted)">Pilih transaksi untuk melihat total tagihan</span>';
-    totEl.textContent='Rp 0';
-    infoEl.textContent='Pilih transaksi terlebih dahulu';
+// --- UPDATE TAMPILAN QR & KALKULASI DENDA REAL-TIME ---
+function updateQR() {
+  const selectedId = document.getElementById('qr-trans').value;
+  let dataTx = typeof allTransactions !== 'undefined' ? allTransactions : (typeof transactions !== 'undefined' ? transactions : (typeof loans !== 'undefined' ? loans : []));
+
+  const tx = dataTx.find(x => {
+    const targetId = x.id || x.id_transaksi || x.idTransaksi;
+    return String(targetId) === String(selectedId);
+  });
+  
+  const elAmount = document.getElementById('qr-amount');
+  const elTotal = document.getElementById('qr-total');
+  const elInfo = document.getElementById('qr-info');
+  const elSvg = document.getElementById('qr-svg');
+  
+  if (!tx) {
+    elAmount.innerHTML = 'Pilih transaksi untuk melihat total tagihan';
+    elTotal.innerText = 'Rp 0';
+    elInfo.innerText = 'Pilih transaksi terlebih dahulu';
+    elSvg.innerHTML = '';
     return;
   }
-  const total=t.biaya+(t.denda||0);
-  const a=assets.find(x=>x.id===t.asetId)||{nama:'?'};
-  amEl.innerHTML=`<div style="font-size:13px;color:var(--c1)">
-    <b>${t.nama}</b> · ${a.nama}<br>
-    Sewa: ${idr(t.biaya)} ${t.denda?`+ Denda: <span style="color:#e63946">${idr(t.denda)}</span>`:''}
-    <br><b style="font-size:18px;color:var(--c2);font-family:'Syne',sans-serif">${idr(total)}</b>
-  </div>`;
-  totEl.textContent=idr(total);
-  infoEl.textContent=`${qrPayMethod} · ${t.nama}`;
-  generateQR();
+
+  // 1. AMBIL BIAYA POKOK DAN DENDA DARI DATABASE
+  const biayaSewa = Number(tx.biaya) || 0;
+  let denda = Number(tx.denda) || 0;
+
+  // 2. LOGIKA REAL-TIME: Jika status barang MASIH DIPINJAM, hitung otomatis dendanya sekarang juga!
+  if (tx.status === 'Dipinjam') {
+    const now = new Date(); // Waktu saat ini
+    const batas = new Date(tx.tglKembali);
+    batas.setHours(23, 59, 59, 999);
+    
+    if (now > batas) {
+      const hours = Math.ceil((now - batas) / (1000 * 3600));
+      denda = hours * 5000; // Tarif denda Rp 5.000/jam
+    }
+  }
+
+  // 3. KALKULASI TOTAL
+  const totalBayar = biayaSewa + denda;
+  const txNama = tx.nama || tx.nama_peminjam || 'Pelanggan';
+
+  // 4. RENDER TAMPILAN
+  let rincianHTML = `Biaya Sewa: <b style="color:var(--c1)">${idr(biayaSewa)}</b>`;
+  if (denda > 0) {
+    rincianHTML += `<br><span style="color:#e63946">Denda Keterlambatan: <b>+ ${idr(denda)}</b></span>`;
+  }
+  
+  elAmount.innerHTML = rincianHTML;
+  elTotal.innerText = idr(totalBayar);
+  elInfo.innerText = `Tagihan untuk: ${txNama}`;
+
+  elSvg.innerHTML = `
+    <rect width="200" height="200" fill="#ffffff" rx="12"/>
+    <rect x="20" y="20" width="40" height="40" fill="none" stroke="#2d6a4f" stroke-width="6" rx="4"/>
+    <rect x="30" y="30" width="20" height="20" fill="#2d6a4f" rx="2"/>
+    <rect x="140" y="20" width="40" height="40" fill="none" stroke="#2d6a4f" stroke-width="6" rx="4"/>
+    <rect x="150" y="30" width="20" height="20" fill="#2d6a4f" rx="2"/>
+    <rect x="20" y="140" width="40" height="40" fill="none" stroke="#2d6a4f" stroke-width="6" rx="4"/>
+    <rect x="30" y="150" width="20" height="20" fill="#2d6a4f" rx="2"/>
+    <path d="M80 30 h40 v20 h-20 v20 h20 v20 h-40 z M30 80 h20 v40 h-20 z M150 80 h20 v60 h-20 z M80 150 h50 v20 h-50 z M110 110 h40 v20 h-40 z" fill="#1a3a2a" opacity="0.8"/>
+  `;
 }
 
 function generateQR(){
@@ -512,12 +714,49 @@ function generateQR(){
   document.getElementById('qr-label').textContent=`CAMPTRACK · ${qrPayMethod}`;
 }
 
-function markPaid(){
-  const id=document.getElementById('qr-trans').value;
-  if(!id){alert('Pilih transaksi terlebih dahulu!');return;}
-  alert('✅ Pembayaran dikonfirmasi!\nTerima kasih telah menggunakan CampTrack.');
-  document.getElementById('qr-trans').value='';
-  updateQR();
+// --- KONFIRMASI PEMBAYARAN (UPDATE STATUS BAYAR KE DATABASE) ---
+async function markPaid(){
+  const id = document.getElementById('qr-trans').value;
+  if(!id){
+    alert('Pilih transaksi terlebih dahulu pada dropdown!');
+    return;
+  }
+  
+  const payload = {
+    action: "bayar_transaksi",
+    id: parseInt(id)
+  };
+
+  document.getElementById('global-loader').style.display = 'flex';
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+      redirect: "follow"
+    });
+
+    const result = await response.json();
+
+    if (result.status === "success") {
+      alert('✅ ' + result.message + '\nTerima kasih telah menggunakan CampTrack.');
+      
+      // Reset pilihan dropdown dan tampilan QR setelah sukses lunas
+      document.getElementById('qr-trans').value = '';
+      updateQR();
+      
+      // Sinkronisasi data lokal dengan database terbaru Google Sheets
+      await loadInitialData();
+    } else {
+      alert('❌ Gagal mengonfirmasi pembayaran: ' + result.message);
+    }
+  } catch (error) {
+    console.error("Payment Error:", error);
+    alert('Terjadi kesalahan jaringan saat memproses pembayaran.');
+  } finally {
+    document.getElementById('global-loader').style.display = 'none';
+  }
 }
 
 // INIT
