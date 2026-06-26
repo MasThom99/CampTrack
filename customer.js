@@ -8,12 +8,15 @@ const API_URL = "https://script.google.com/macros/s/AKfycbwfB6btiYTyECs_XXGu2j3O
 // --- STATE ---
 let assets = [];
 let currentPage = 'beranda';
-let cartItems = [];
+let cartItems = []; // { id, nama, tarif, foto, tglMulai, tglSelesai }
+let wishlistItems = []; // { id }
 let currentUser = null; // { id, nama, hp, email, password, created_at }
 let reviews = []; // { id, asetId, userId, userName, rating, komentar, created_at, balasan_admin }
 
 // --- HELPERS ---
 const idr = v => 'Rp ' + Math.round(v).toLocaleString('id-ID');
+const today = () => new Date().toISOString().slice(0, 10);
+const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); };
 
 
 // --- LOADER ---
@@ -54,6 +57,7 @@ function navTo(page) {
   // Render page-specific content
   if (page === 'katalog') renderCatalog();
   if (page === 'beranda') renderPopular();
+  if (page === 'keranjang') renderCart();
 }
 
 
@@ -330,33 +334,283 @@ function openDetail(id) {
 }
 
 
-// --- CART (Basic - placeholder for Stage 4) ---
+// --- CART & WISHLIST MODULE ---
 function addToCart(id) {
   const asset = assets.find(a => a.id === id);
   if (!asset || asset.status !== 'Tersedia') return;
 
-  // Check if already in cart
   const existing = cartItems.find(c => c.id === id);
   if (existing) {
-    alert('Barang ini sudah ada di keranjang Anda.');
+    showToast('Barang ini sudah ada di keranjang.', 'error');
     return;
   }
 
-  cartItems.push({ id: asset.id, nama: asset.nama, tarif: asset.tarif });
+  cartItems.push({
+    id: asset.id,
+    nama: asset.nama,
+    tarif: asset.tarif,
+    foto: asset.foto || '📦',
+    kat: asset.kat,
+    tglMulai: today(),
+    tglSelesai: tomorrow()
+  });
+
+  saveCartLocal();
   updateCartBadge();
-  alert(`✅ ${asset.nama} ditambahkan ke keranjang!`);
+  showToast(`${asset.nama} ditambahkan ke keranjang!`, 'success');
 }
 
+function removeFromCart(id) {
+  cartItems = cartItems.filter(c => c.id !== id);
+  saveCartLocal();
+  updateCartBadge();
+  renderCart();
+  showToast('Barang dihapus dari keranjang.', 'success');
+}
+
+function updateCartDate(id, field, value) {
+  const item = cartItems.find(c => c.id === id);
+  if (item) {
+    item[field] = value;
+    saveCartLocal();
+    renderCart();
+  }
+}
+
+function clearCart() {
+  if (cartItems.length === 0) return;
+  if (confirm('Hapus semua barang dari keranjang?')) {
+    cartItems = [];
+    saveCartLocal();
+    updateCartBadge();
+    renderCart();
+    showToast('Keranjang dikosongkan.', 'success');
+  }
+}
+
+function getCartTotal() {
+  return cartItems.reduce((sum, item) => {
+    const days = calcDays(item.tglMulai, item.tglSelesai);
+    return sum + (days * item.tarif);
+  }, 0);
+}
+
+function calcDays(start, end) {
+  if (!start || !end) return 1;
+  const diff = Math.ceil((new Date(end) - new Date(start)) / (1000 * 3600 * 24));
+  return Math.max(1, diff);
+}
+
+// --- WISHLIST ---
 function addToWishlist(id) {
-  alert('💚 Fitur Wishlist akan tersedia di update berikutnya!');
+  const asset = assets.find(a => a.id === id);
+  if (!asset) return;
+
+  const existing = wishlistItems.find(w => w.id === id);
+  if (existing) {
+    // Toggle: remove if already in wishlist
+    wishlistItems = wishlistItems.filter(w => w.id !== id);
+    saveWishlistLocal();
+    showToast(`${asset.nama} dihapus dari wishlist.`, 'success');
+  } else {
+    wishlistItems.push({ id: asset.id });
+    saveWishlistLocal();
+    showToast(`${asset.nama} disimpan ke wishlist!`, 'success');
+  }
+
+  // Re-render if on cart page
+  if (currentPage === 'keranjang') renderCart();
 }
 
+function removeFromWishlist(id) {
+  wishlistItems = wishlistItems.filter(w => w.id !== id);
+  saveWishlistLocal();
+  renderCart();
+  showToast('Dihapus dari wishlist.', 'success');
+}
+
+function moveWishlistToCart(id) {
+  const asset = assets.find(a => a.id === id);
+  if (!asset) return;
+  if (asset.status !== 'Tersedia') {
+    showToast('Barang ini sedang tidak tersedia.', 'error');
+    return;
+  }
+  // Remove from wishlist
+  wishlistItems = wishlistItems.filter(w => w.id !== id);
+  saveWishlistLocal();
+  // Add to cart
+  addToCart(id);
+  renderCart();
+}
+
+function isInWishlist(id) {
+  return wishlistItems.some(w => w.id === id);
+}
+
+// --- CART BADGE ---
 function updateCartBadge() {
   const count = cartItems.length;
   const badge = document.getElementById('cart-badge');
   const bottomBadge = document.getElementById('bottom-cart-badge');
   if (badge) badge.textContent = count;
   if (bottomBadge) bottomBadge.textContent = count;
+}
+
+// --- LOCAL STORAGE ---
+function saveCartLocal() {
+  localStorage.setItem('camptrack_cart', JSON.stringify(cartItems));
+}
+function loadCartLocal() {
+  const saved = localStorage.getItem('camptrack_cart');
+  if (saved) { try { cartItems = JSON.parse(saved); } catch(e) { cartItems = []; } }
+}
+function saveWishlistLocal() {
+  localStorage.setItem('camptrack_wishlist', JSON.stringify(wishlistItems));
+}
+function loadWishlistLocal() {
+  const saved = localStorage.getItem('camptrack_wishlist');
+  if (saved) { try { wishlistItems = JSON.parse(saved); } catch(e) { wishlistItems = []; } }
+}
+
+// --- RENDER CART PAGE ---
+function renderCart() {
+  const cartContent = document.getElementById('cart-items-list');
+  const wishContent = document.getElementById('wishlist-items-list');
+  const summaryEl = document.getElementById('cart-summary');
+  if (!cartContent) return;
+
+  // CART TAB
+  if (cartItems.length === 0) {
+    cartContent.innerHTML = `
+      <div class="cart-empty">
+        <i class="ti ti-shopping-cart-off"></i>
+        <h3>Keranjang Kosong</h3>
+        <p>Belum ada barang di keranjang. Yuk cari alat kemping!</p>
+        <button class="btn-primary-lg" onclick="navTo('katalog')"><i class="ti ti-backpack"></i> Lihat Katalog</button>
+      </div>`;
+    if (summaryEl) summaryEl.style.display = 'none';
+  } else {
+    cartContent.innerHTML = cartItems.map(item => {
+      const days = calcDays(item.tglMulai, item.tglSelesai);
+      const subtotal = days * item.tarif;
+      return `
+        <div class="cart-item">
+          <div class="cart-item-img">${item.foto}</div>
+          <div class="cart-item-info">
+            <div class="cart-item-name">${item.nama}</div>
+            <div class="cart-item-price">${idr(item.tarif)} <small>/hari</small></div>
+            <div class="cart-item-dates">
+              <div class="cart-date-group">
+                <label>Mulai</label>
+                <input type="date" value="${item.tglMulai}" min="${today()}"
+                  onchange="updateCartDate(${item.id}, 'tglMulai', this.value)">
+              </div>
+              <div class="cart-date-group">
+                <label>Selesai</label>
+                <input type="date" value="${item.tglSelesai}" min="${item.tglMulai || today()}"
+                  onchange="updateCartDate(${item.id}, 'tglSelesai', this.value)">
+              </div>
+            </div>
+            <div class="cart-item-subtotal">
+              <span>${days} hari × ${idr(item.tarif)} =</span>
+              <strong>${idr(subtotal)}</strong>
+            </div>
+          </div>
+          <div class="cart-item-actions">
+            <button class="btn-cart-action" onclick="addToWishlist(${item.id})" title="Simpan ke wishlist">
+              <i class="ti ti-heart"></i>
+            </button>
+            <button class="btn-cart-action danger" onclick="removeFromCart(${item.id})" title="Hapus">
+              <i class="ti ti-trash"></i>
+            </button>
+          </div>
+        </div>`;
+    }).join('');
+
+    // SUMMARY
+    if (summaryEl) {
+      summaryEl.style.display = 'block';
+      const totalDays = cartItems.reduce((s, i) => s + calcDays(i.tglMulai, i.tglSelesai), 0);
+      const grandTotal = getCartTotal();
+      summaryEl.innerHTML = `
+        <div class="summary-row"><span>Total Barang</span><strong>${cartItems.length} item</strong></div>
+        <div class="summary-row"><span>Total Durasi</span><strong>${totalDays} hari</strong></div>
+        <div class="summary-divider"></div>
+        <div class="summary-row total"><span>Grand Total</span><strong>${idr(grandTotal)}</strong></div>
+        <button class="btn-checkout" onclick="handleCheckout()">
+          <i class="ti ti-credit-card"></i> Checkout Sekarang
+        </button>
+        <button class="btn-clear-cart" onclick="clearCart()">
+          <i class="ti ti-trash"></i> Kosongkan Keranjang
+        </button>`;
+    }
+  }
+
+  // WISHLIST TAB
+  if (wishContent) {
+    if (wishlistItems.length === 0) {
+      wishContent.innerHTML = `
+        <div class="cart-empty">
+          <i class="ti ti-heart-off"></i>
+          <h3>Wishlist Kosong</h3>
+          <p>Simpan barang yang Anda incar untuk nanti!</p>
+          <button class="btn-primary-lg" onclick="navTo('katalog')"><i class="ti ti-backpack"></i> Lihat Katalog</button>
+        </div>`;
+    } else {
+      wishContent.innerHTML = wishlistItems.map(w => {
+        const asset = assets.find(a => a.id === w.id);
+        if (!asset) return '';
+        const isAvail = asset.status === 'Tersedia';
+        return `
+          <div class="wishlist-item">
+            <div class="wishlist-item-img">${asset.foto || '📦'}</div>
+            <div class="wishlist-item-info">
+              <div class="wishlist-item-name">${asset.nama}</div>
+              <div class="wishlist-item-price">${idr(asset.tarif)}/hari</div>
+              <span class="wishlist-status ${isAvail ? 'avail' : 'not-avail'}">
+                ${isAvail ? 'Tersedia' : asset.status}
+              </span>
+            </div>
+            <div class="wishlist-item-actions">
+              <button class="btn-cart-action primary" onclick="moveWishlistToCart(${asset.id})" title="Pindah ke keranjang" ${!isAvail ? 'disabled' : ''}>
+                <i class="ti ti-shopping-cart-plus"></i>
+              </button>
+              <button class="btn-cart-action danger" onclick="removeFromWishlist(${asset.id})" title="Hapus">
+                <i class="ti ti-x"></i>
+              </button>
+            </div>
+          </div>`;
+      }).join('');
+    }
+  }
+
+  // Update tab counters
+  const cartTab = document.getElementById('tab-cart-count');
+  const wishTab = document.getElementById('tab-wish-count');
+  if (cartTab) cartTab.textContent = cartItems.length;
+  if (wishTab) wishTab.textContent = wishlistItems.length;
+}
+
+function switchCartTab(tab) {
+  document.querySelectorAll('.cart-tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.cart-tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector(`.cart-tab-btn[data-tab="${tab}"]`)?.classList.add('active');
+  document.getElementById('tab-content-' + tab)?.classList.add('active');
+}
+
+// --- CHECKOUT (placeholder for Stage 5) ---
+function handleCheckout() {
+  if (!currentUser) {
+    showToast('Silakan masuk untuk melanjutkan checkout.', 'error');
+    navTo('login');
+    return;
+  }
+  if (cartItems.length === 0) {
+    showToast('Keranjang kosong!', 'error');
+    return;
+  }
+  showToast('Fitur checkout akan tersedia di update berikutnya!', 'success');
 }
 
 // --- FILTER BY CATEGORY (from beranda) ---
@@ -394,6 +648,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Load local reviews as fallback
   loadReviewsLocal();
+
+  // Load cart and wishlist from localStorage
+  loadCartLocal();
+  loadWishlistLocal();
 
   // Load catalog data from API
   loadCatalog();

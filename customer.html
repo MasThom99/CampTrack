@@ -259,17 +259,40 @@
       </div>
     </section>
 
-    <!-- PAGE: KERANJANG (Placeholder for next stages) -->
+    <!-- PAGE: KERANJANG -->
     <section class="page" id="page-keranjang">
       <div class="page-top">
         <h2 class="page-title"><i class="ti ti-shopping-cart"></i> Keranjang Saya</h2>
         <p class="page-sub">Barang yang siap Anda sewa</p>
       </div>
-      <div class="coming-soon">
-        <i class="ti ti-shopping-cart"></i>
-        <h3>Fitur Keranjang</h3>
-        <p>Akan tersedia di update berikutnya. Saat ini Anda bisa langsung pesan dari halaman detail barang.</p>
-        <button class="btn-primary-lg" onclick="navTo('katalog')"><i class="ti ti-backpack"></i> Lihat Katalog</button>
+
+      <!-- TABS: Cart / Wishlist -->
+      <div class="cart-tabs">
+        <button class="cart-tab-btn active" data-tab="cart" onclick="switchCartTab('cart')">
+          <i class="ti ti-shopping-cart"></i> Keranjang <span class="tab-count" id="tab-cart-count">0</span>
+        </button>
+        <button class="cart-tab-btn" data-tab="wishlist" onclick="switchCartTab('wishlist')">
+          <i class="ti ti-heart"></i> Wishlist <span class="tab-count" id="tab-wish-count">0</span>
+        </button>
+      </div>
+
+      <!-- TAB CONTENT: Cart -->
+      <div class="cart-tab-content active" id="tab-content-cart">
+        <div class="cart-layout">
+          <div class="cart-items" id="cart-items-list">
+            <!-- Rendered by JS -->
+          </div>
+          <div class="cart-summary-card" id="cart-summary">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB CONTENT: Wishlist -->
+      <div class="cart-tab-content" id="tab-content-wishlist">
+        <div class="wishlist-items" id="wishlist-items-list">
+          <!-- Rendered by JS -->
+        </div>
       </div>
     </section>
 
