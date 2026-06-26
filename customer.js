@@ -10,6 +10,7 @@ let assets = [];
 let currentPage = 'beranda';
 let cartItems = [];
 let currentUser = null; // { id, nama, hp, email, password, created_at }
+let reviews = []; // { id, asetId, userId, userName, rating, komentar, created_at, balasan_admin }
 
 // --- HELPERS ---
 const idr = v => 'Rp ' + Math.round(v).toLocaleString('id-ID');
@@ -89,6 +90,9 @@ async function loadCatalog() {
         const available = assets.filter(a => a.status === 'Tersedia').length;
         heroTotal.textContent = available + '+';
       }
+
+      // Load reviews (async, non-blocking)
+      await loadReviews();
 
       renderPopular();
       renderCatalog();
@@ -185,6 +189,13 @@ function createCatalogCard(asset) {
   const badgeClass = isAvailable ? '' : 'unavailable';
   const badgeText = isAvailable ? 'Tersedia' : asset.status;
 
+  // Compute actual rating from reviews
+  const assetReviews = reviews.filter(r => String(r.asetId) === String(asset.id));
+  const avgRating = assetReviews.length > 0
+    ? (assetReviews.reduce((sum, r) => sum + r.rating, 0) / assetReviews.length).toFixed(1)
+    : '-';
+  const reviewCount = assetReviews.length;
+
   return `
     <div class="catalog-card" onclick="openDetail(${asset.id})">
       <div class="catalog-card-img">
@@ -198,8 +209,8 @@ function createCatalogCard(asset) {
         <div class="catalog-card-footer">
           <div class="catalog-card-price">${idr(asset.tarif)} <small>/hari</small></div>
           <div class="catalog-card-rating">
-            <i class="ti ti-star-filled"></i> 4.${Math.floor(Math.random() * 3) + 7}
-            <span>(${Math.floor(Math.random() * 20) + 5})</span>
+            <i class="ti ti-star-filled"></i> ${avgRating}
+            <span>(${reviewCount})</span>
           </div>
         </div>
         <button class="btn-add-cart ${isAvailable ? '' : 'disabled'}"
@@ -221,11 +232,23 @@ function openDetail(id) {
   const isAvailable = asset.status === 'Tersedia';
   const content = document.getElementById('detail-content');
 
+  // Get reviews for this asset
+  const assetReviews = reviews.filter(r => String(r.asetId) === String(id));
+  const avgRating = assetReviews.length > 0
+    ? (assetReviews.reduce((sum, r) => sum + r.rating, 0) / assetReviews.length).toFixed(1)
+    : '0';
+  const reviewCount = assetReviews.length;
+
   content.innerHTML = `
     <div class="detail-img">${asset.foto || '📦'}</div>
     <div class="detail-info">
       <div class="detail-category">${asset.kat}</div>
       <h1 class="detail-name">${asset.nama}</h1>
+      <div class="detail-rating-summary">
+        <div class="stars-display">${renderStars(parseFloat(avgRating))}</div>
+        <span class="rating-value">${avgRating}</span>
+        <span class="rating-count">(${reviewCount} ulasan)</span>
+      </div>
       <p class="detail-desc">${asset.desc || 'Alat kemping berkualitas tinggi untuk petualangan outdoor Anda.'}</p>
       <div class="detail-price">${idr(asset.tarif)} <small>/ hari</small></div>
       <div class="detail-status ${isAvailable ? 'available' : 'unavailable'}">
@@ -247,6 +270,58 @@ function openDetail(id) {
         <button class="btn-wishlist" onclick="addToWishlist(${asset.id})">
           <i class="ti ti-heart"></i> Simpan
         </button>
+      </div>
+    </div>
+
+    <!-- REVIEW SECTION -->
+    <div class="detail-reviews-section">
+      <div class="reviews-header">
+        <h3><i class="ti ti-star"></i> Ulasan Pelanggan</h3>
+        <div class="reviews-summary-bar">
+          <div class="summary-avg">
+            <span class="avg-number">${avgRating}</span>
+            <div class="avg-stars">${renderStars(parseFloat(avgRating))}</div>
+            <span class="avg-count">${reviewCount} ulasan</span>
+          </div>
+          ${reviewCount > 0 ? renderRatingBars(assetReviews) : ''}
+        </div>
+      </div>
+
+      <!-- WRITE REVIEW FORM -->
+      <div class="write-review-box" id="write-review-box">
+        <h4><i class="ti ti-pencil"></i> Tulis Ulasan</h4>
+        ${currentUser ? `
+          <form id="form-review" onsubmit="return submitReview(event, ${asset.id})">
+            <div class="star-input" id="star-input">
+              <span>Rating:</span>
+              <div class="star-select">
+                ${[1,2,3,4,5].map(n => `<button type="button" class="star-btn" data-rating="${n}" onclick="setRating(${n})"><i class="ti ti-star"></i></button>`).join('')}
+              </div>
+              <input type="hidden" id="review-rating" value="0">
+            </div>
+            <div class="form-group">
+              <textarea id="review-text" rows="3" placeholder="Ceritakan pengalaman Anda menggunakan barang ini..." required minlength="10"></textarea>
+            </div>
+            <button type="submit" class="btn-submit-review">
+              <i class="ti ti-send"></i> Kirim Ulasan
+            </button>
+          </form>
+        ` : `
+          <div class="review-login-prompt">
+            <i class="ti ti-lock"></i>
+            <p>Silakan <button class="btn-auth-toggle" onclick="navTo('login')">masuk</button> untuk menulis ulasan.</p>
+          </div>
+        `}
+      </div>
+
+      <!-- REVIEWS LIST -->
+      <div class="reviews-list" id="reviews-list-${asset.id}">
+        ${assetReviews.length > 0 ? assetReviews.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(r => renderReviewCard(r)).join('') : `
+          <div class="no-reviews">
+            <i class="ti ti-message-off"></i>
+            <p>Belum ada ulasan untuk barang ini. Jadilah yang pertama!</p>
+          </div>
+        `}
       </div>
     </div>
   `;
@@ -317,6 +392,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Restore session from localStorage
   restoreSession();
 
+  // Load local reviews as fallback
+  loadReviewsLocal();
+
   // Load catalog data from API
   loadCatalog();
 
@@ -340,6 +418,230 @@ document.addEventListener('DOMContentLoaded', () => {
   updateCartBadge();
 });
 
+
+
+/* ========================================
+   REVIEW MODULE - Rating, Display, Submit
+   ======================================== */
+
+// --- RENDER STARS ---
+function renderStars(rating) {
+  let html = '';
+  for (let i = 1; i <= 5; i++) {
+    if (i <= Math.floor(rating)) {
+      html += '<i class="ti ti-star-filled star-filled"></i>';
+    } else if (i - 0.5 <= rating) {
+      html += '<i class="ti ti-star-half-filled star-filled"></i>';
+    } else {
+      html += '<i class="ti ti-star star-empty"></i>';
+    }
+  }
+  return html;
+}
+
+// --- RENDER RATING BARS (distribution) ---
+function renderRatingBars(reviewsArr) {
+  const total = reviewsArr.length;
+  if (total === 0) return '';
+
+  let html = '<div class="rating-bars">';
+  for (let i = 5; i >= 1; i--) {
+    const count = reviewsArr.filter(r => r.rating === i).length;
+    const pct = Math.round((count / total) * 100);
+    html += `
+      <div class="rating-bar-row">
+        <span class="bar-label">${i}</span>
+        <i class="ti ti-star-filled" style="font-size:12px;color:var(--accent)"></i>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+        <span class="bar-count">${count}</span>
+      </div>
+    `;
+  }
+  html += '</div>';
+  return html;
+}
+
+// --- RENDER SINGLE REVIEW CARD ---
+function renderReviewCard(review) {
+  const initial = review.userName ? review.userName.charAt(0).toUpperCase() : '?';
+  const date = new Date(review.created_at).toLocaleDateString('id-ID', {
+    day: 'numeric', month: 'long', year: 'numeric'
+  });
+
+  return `
+    <div class="review-card">
+      <div class="review-card-header">
+        <div class="review-avatar">${initial}</div>
+        <div class="review-meta">
+          <strong>${review.userName}</strong>
+          <span>${date}</span>
+        </div>
+        <div class="review-stars">${renderStars(review.rating)}</div>
+      </div>
+      <p class="review-text">${review.komentar}</p>
+      ${review.balasan_admin ? `
+        <div class="review-reply">
+          <div class="reply-header"><i class="ti ti-message-reply"></i> <strong>Balasan Admin</strong></div>
+          <p>${review.balasan_admin}</p>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+// --- SET RATING (star input) ---
+function setRating(rating) {
+  document.getElementById('review-rating').value = rating;
+  const stars = document.querySelectorAll('#star-input .star-btn');
+  stars.forEach((btn, idx) => {
+    const icon = btn.querySelector('i');
+    if (idx < rating) {
+      icon.className = 'ti ti-star-filled';
+      btn.classList.add('active');
+    } else {
+      icon.className = 'ti ti-star';
+      btn.classList.remove('active');
+    }
+  });
+}
+
+// --- SUBMIT REVIEW ---
+async function submitReview(event, asetId) {
+  event.preventDefault();
+
+  if (!currentUser) {
+    showToast('Silakan masuk untuk menulis ulasan.', 'error');
+    navTo('login');
+    return false;
+  }
+
+  const rating = parseInt(document.getElementById('review-rating').value);
+  const komentar = document.getElementById('review-text').value.trim();
+
+  if (rating === 0) {
+    showToast('Pilih rating bintang terlebih dahulu!', 'error');
+    return false;
+  }
+  if (komentar.length < 10) {
+    showToast('Ulasan minimal 10 karakter.', 'error');
+    return false;
+  }
+
+  // Check if user already reviewed this item
+  const existing = reviews.find(r => String(r.asetId) === String(asetId) && String(r.userId) === String(currentUser.id));
+  if (existing) {
+    showToast('Anda sudah pernah mengulas barang ini.', 'error');
+    return false;
+  }
+
+  try {
+    const payload = {
+      action: 'submit_review',
+      data: {
+        asetId: asetId,
+        userId: currentUser.id,
+        userName: currentUser.nama,
+        rating: rating,
+        komentar: komentar
+      }
+    };
+
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload),
+      redirect: 'follow'
+    });
+
+    const result = await response.json();
+
+    if (result.status === 'success') {
+      // Add to local state
+      const newReview = {
+        id: result.id || Date.now(),
+        asetId: asetId,
+        userId: currentUser.id,
+        userName: currentUser.nama,
+        rating: rating,
+        komentar: komentar,
+        created_at: new Date().toISOString(),
+        balasan_admin: ''
+      };
+      reviews.push(newReview);
+      showToast('Ulasan berhasil dikirim! Terima kasih.', 'success');
+      openDetail(asetId); // Re-render detail page
+    } else {
+      showToast(result.message || 'Gagal mengirim ulasan.', 'error');
+    }
+  } catch (error) {
+    console.error('Review Error:', error);
+    // Fallback: save locally
+    const newReview = {
+      id: 'local_' + Date.now(),
+      asetId: asetId,
+      userId: currentUser.id,
+      userName: currentUser.nama,
+      rating: rating,
+      komentar: komentar,
+      created_at: new Date().toISOString(),
+      balasan_admin: ''
+    };
+    reviews.push(newReview);
+    saveReviewsLocal();
+    showToast('Ulasan disimpan (mode lokal).', 'success');
+    openDetail(asetId);
+  }
+
+  return false;
+}
+
+// --- LOCAL REVIEW STORAGE ---
+function saveReviewsLocal() {
+  localStorage.setItem('camptrack_reviews', JSON.stringify(reviews));
+}
+
+function loadReviewsLocal() {
+  const saved = localStorage.getItem('camptrack_reviews');
+  if (saved) {
+    try {
+      reviews = JSON.parse(saved);
+    } catch (e) {
+      reviews = [];
+    }
+  }
+}
+
+// --- LOAD REVIEWS FROM API ---
+async function loadReviews() {
+  try {
+    const response = await fetch(`${API_URL}?page=reviews`);
+    const result = await response.json();
+
+    if (result.status === 'success' && result.reviews) {
+      reviews = result.reviews.map(r => ({
+        id: r.id_review || r.id,
+        asetId: r.id_aset || r.asetId,
+        userId: r.id_customer || r.userId,
+        userName: r.nama || r.userName,
+        rating: Number(r.rating),
+        komentar: r.komentar,
+        created_at: r.created_at,
+        balasan_admin: r.balasan_admin || ''
+      }));
+    }
+  } catch (error) {
+    console.log('Reviews API unavailable, using local data.');
+    loadReviewsLocal();
+  }
+}
+
+// --- GET AVERAGE RATING FOR ASSET ---
+function getAssetRating(asetId) {
+  const assetReviews = reviews.filter(r => String(r.asetId) === String(asetId));
+  if (assetReviews.length === 0) return { avg: 0, count: 0 };
+  const avg = assetReviews.reduce((sum, r) => sum + r.rating, 0) / assetReviews.length;
+  return { avg: parseFloat(avg.toFixed(1)), count: assetReviews.length };
+}
 
 
 /* ========================================
