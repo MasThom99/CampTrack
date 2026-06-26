@@ -296,17 +296,39 @@
       </div>
     </section>
 
-    <!-- PAGE: PESANAN (Placeholder) -->
+    <!-- PAGE: PESANAN -->
     <section class="page" id="page-pesanan">
       <div class="page-top">
         <h2 class="page-title"><i class="ti ti-package"></i> Pesanan Saya</h2>
         <p class="page-sub">Lacak status pesanan Anda</p>
       </div>
-      <div class="coming-soon">
-        <i class="ti ti-package"></i>
-        <h3>Fitur Pesanan</h3>
-        <p>Akan tersedia di update berikutnya. Silakan hubungi admin untuk cek status pesanan.</p>
-        <button class="btn-primary-lg" onclick="navTo('katalog')"><i class="ti ti-backpack"></i> Lihat Katalog</button>
+
+      <!-- LOGGED IN: Order list -->
+      <div id="pesanan-content">
+        <div class="orders-container" id="orders-list">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+
+      <!-- NOT LOGGED IN -->
+      <div id="pesanan-guest" style="display:none">
+        <div class="coming-soon">
+          <i class="ti ti-lock"></i>
+          <h3>Masuk untuk Melihat Pesanan</h3>
+          <p>Silakan login untuk melihat riwayat dan status pesanan Anda.</p>
+          <button class="btn-primary-lg" onclick="navTo('login')"><i class="ti ti-login"></i> Masuk</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAGE: CHECKOUT -->
+    <section class="page" id="page-checkout">
+      <div class="page-top">
+        <h2 class="page-title"><i class="ti ti-credit-card"></i> Checkout</h2>
+        <p class="page-sub">Konfirmasi dan selesaikan pesanan Anda</p>
+      </div>
+      <div id="checkout-content">
+        <!-- Rendered by JS -->
       </div>
     </section>
 

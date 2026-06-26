@@ -58,6 +58,7 @@ function navTo(page) {
   if (page === 'katalog') renderCatalog();
   if (page === 'beranda') renderPopular();
   if (page === 'keranjang') renderCart();
+  if (page === 'pesanan') renderOrders();
 }
 
 
@@ -599,7 +600,16 @@ function switchCartTab(tab) {
   document.getElementById('tab-content-' + tab)?.classList.add('active');
 }
 
-// --- CHECKOUT (placeholder for Stage 5) ---
+// --- CHECKOUT & ORDER MODULE ---
+let orders = []; // { id, items, totalBiaya, status, statusBayar, metodeBayar, catatan, createdAt }
+
+function generateOrderId() {
+  const now = new Date();
+  const date = now.toISOString().slice(0,10).replace(/-/g,'');
+  const rand = Math.floor(Math.random() * 900) + 100;
+  return `ORD-${date}-${rand}`;
+}
+
 function handleCheckout() {
   if (!currentUser) {
     showToast('Silakan masuk untuk melanjutkan checkout.', 'error');
@@ -610,7 +620,342 @@ function handleCheckout() {
     showToast('Keranjang kosong!', 'error');
     return;
   }
-  showToast('Fitur checkout akan tersedia di update berikutnya!', 'success');
+  // Navigate to checkout page and render
+  renderCheckoutPage();
+  navTo('checkout');
+}
+
+function renderCheckoutPage() {
+  const el = document.getElementById('checkout-content');
+  if (!el) return;
+
+  const grandTotal = getCartTotal();
+
+  el.innerHTML = `
+    <div class="checkout-layout">
+      <div class="checkout-items-section">
+        <h3><i class="ti ti-list-check"></i> Ringkasan Pesanan</h3>
+        <div class="checkout-items">
+          ${cartItems.map(item => {
+            const days = calcDays(item.tglMulai, item.tglSelesai);
+            const sub = days * item.tarif;
+            return `
+              <div class="checkout-item-row">
+                <span class="checkout-item-emoji">${item.foto}</span>
+                <div class="checkout-item-detail">
+                  <strong>${item.nama}</strong>
+                  <small>${days} hari (${item.tglMulai} s/d ${item.tglSelesai}) × ${idr(item.tarif)}</small>
+                </div>
+                <span class="checkout-item-sub">${idr(sub)}</span>
+              </div>`;
+          }).join('')}
+        </div>
+        <div class="checkout-total-row">
+          <span>Total (${cartItems.length} item)</span>
+          <strong>${idr(grandTotal)}</strong>
+        </div>
+      </div>
+
+      <div class="checkout-form-section">
+        <h3><i class="ti ti-file-text"></i> Detail Pemesanan</h3>
+        <form id="form-checkout" onsubmit="return submitOrder(event)">
+          <div class="form-group">
+            <label>Nama Pemesan</label>
+            <input type="text" id="co-nama" value="${currentUser ? currentUser.nama : ''}" readonly>
+          </div>
+          <div class="form-group">
+            <label>No. HP / WhatsApp</label>
+            <input type="text" id="co-hp" value="${currentUser ? currentUser.hp : ''}" readonly>
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="text" id="co-email" value="${currentUser ? currentUser.email : ''}" readonly>
+          </div>
+          <div class="form-group">
+            <label>Metode Pembayaran</label>
+            <select id="co-metode" required>
+              <option value="QRIS">QRIS</option>
+              <option value="Transfer BCA">Transfer BCA</option>
+              <option value="GoPay">GoPay</option>
+              <option value="OVO">OVO</option>
+              <option value="DANA">DANA</option>
+              <option value="Tunai di Toko">Tunai di Toko</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Catatan (opsional)</label>
+            <textarea id="co-catatan" rows="2" placeholder="Misal: mau ambil sore jam 4..."></textarea>
+          </div>
+          <div class="checkout-agree">
+            <input type="checkbox" id="co-agree" required>
+            <label for="co-agree">Saya setuju dengan syarat & ketentuan penyewaan CampTrack</label>
+          </div>
+          <button type="submit" class="btn-checkout" id="btn-submit-order">
+            <i class="ti ti-send"></i> Konfirmasi Pesanan
+          </button>
+          <button type="button" class="btn-clear-cart" onclick="navTo('keranjang')">
+            <i class="ti ti-arrow-left"></i> Kembali ke Keranjang
+          </button>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+async function submitOrder(event) {
+  event.preventDefault();
+
+  const metode = document.getElementById('co-metode').value;
+  const catatan = document.getElementById('co-catatan').value.trim();
+  const agree = document.getElementById('co-agree').checked;
+
+  if (!agree) {
+    showToast('Centang persetujuan syarat & ketentuan.', 'error');
+    return false;
+  }
+
+  const orderId = generateOrderId();
+  const grandTotal = getCartTotal();
+
+  const orderData = {
+    id: orderId,
+    customerId: currentUser.id,
+    customerName: currentUser.nama,
+    customerHp: currentUser.hp,
+    customerEmail: currentUser.email,
+    items: cartItems.map(item => ({
+      asetId: item.id,
+      nama: item.nama,
+      tarif: item.tarif,
+      tglMulai: item.tglMulai,
+      tglSelesai: item.tglSelesai,
+      hari: calcDays(item.tglMulai, item.tglSelesai),
+      subtotal: calcDays(item.tglMulai, item.tglSelesai) * item.tarif
+    })),
+    totalBiaya: grandTotal,
+    metodeBayar: metode,
+    catatan: catatan,
+    status: 'Menunggu Pembayaran',
+    statusBayar: 'Belum Bayar',
+    createdAt: new Date().toISOString()
+  };
+
+  const btnSubmit = document.getElementById('btn-submit-order');
+  btnSubmit.disabled = true;
+  btnSubmit.innerHTML = '<div class="spinner-loader" style="width:20px;height:20px;border-width:2px"></div> Memproses...';
+
+  try {
+    const payload = {
+      action: 'create_order',
+      data: orderData
+    };
+
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload),
+      redirect: 'follow'
+    });
+
+    const result = await response.json();
+
+    if (result.status === 'success') {
+      // Save order locally
+      orders.push(orderData);
+      saveOrdersLocal();
+      // Clear cart
+      cartItems = [];
+      saveCartLocal();
+      updateCartBadge();
+      // Show confirmation
+      showOrderConfirmation(orderData);
+      showToast('Pesanan berhasil dibuat!', 'success');
+    } else {
+      showToast(result.message || 'Gagal membuat pesanan.', 'error');
+    }
+  } catch (error) {
+    console.error('Order Error:', error);
+    // Fallback: save locally
+    orders.push(orderData);
+    saveOrdersLocal();
+    cartItems = [];
+    saveCartLocal();
+    updateCartBadge();
+    showOrderConfirmation(orderData);
+    showToast('Pesanan disimpan (mode lokal).', 'success');
+  } finally {
+    btnSubmit.disabled = false;
+    btnSubmit.innerHTML = '<i class="ti ti-send"></i> Konfirmasi Pesanan';
+  }
+
+  return false;
+}
+
+function showOrderConfirmation(order) {
+  const el = document.getElementById('checkout-content');
+  if (!el) return;
+
+  el.innerHTML = `
+    <div class="order-confirm">
+      <div class="confirm-icon"><i class="ti ti-circle-check"></i></div>
+      <h2>Pesanan Berhasil!</h2>
+      <p>Pesanan Anda telah diterima dan menunggu pembayaran.</p>
+
+      <div class="confirm-order-id">
+        <span>Nomor Pesanan</span>
+        <strong>${order.id}</strong>
+      </div>
+
+      <div class="confirm-details">
+        <div class="confirm-row"><span>Total Tagihan</span><strong>${idr(order.totalBiaya)}</strong></div>
+        <div class="confirm-row"><span>Metode Bayar</span><strong>${order.metodeBayar}</strong></div>
+        <div class="confirm-row"><span>Status</span><span class="badge-status pending">${order.status}</span></div>
+      </div>
+
+      ${order.metodeBayar !== 'Tunai di Toko' ? `
+        <div class="confirm-qr">
+          <h4>Scan untuk Membayar</h4>
+          <div class="qr-placeholder">
+            <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" width="160" height="160">
+              <rect width="200" height="200" fill="#ffffff" rx="12"/>
+              <rect x="20" y="20" width="40" height="40" fill="none" stroke="#2d6a4f" stroke-width="6" rx="4"/>
+              <rect x="30" y="30" width="20" height="20" fill="#2d6a4f" rx="2"/>
+              <rect x="140" y="20" width="40" height="40" fill="none" stroke="#2d6a4f" stroke-width="6" rx="4"/>
+              <rect x="150" y="30" width="20" height="20" fill="#2d6a4f" rx="2"/>
+              <rect x="20" y="140" width="40" height="40" fill="none" stroke="#2d6a4f" stroke-width="6" rx="4"/>
+              <rect x="30" y="150" width="20" height="20" fill="#2d6a4f" rx="2"/>
+              <path d="M80 30 h40 v20 h-20 v20 h20 v20 h-40 z M30 80 h20 v40 h-20 z M150 80 h20 v60 h-20 z M80 150 h50 v20 h-50 z M110 110 h40 v20 h-40 z" fill="#1a3a2a" opacity="0.8"/>
+            </svg>
+            <span class="qr-label-text">CAMPTRACK · ${order.metodeBayar}</span>
+          </div>
+          <p class="qr-note">Bayar dalam <strong>2 jam</strong> atau pesanan otomatis dibatalkan.</p>
+        </div>
+      ` : `
+        <div class="confirm-info-box">
+          <i class="ti ti-info-circle"></i>
+          <p>Silakan datang ke toko dan bayar saat pengambilan barang.<br><strong>Alamat:</strong> Jl. Gunung Slamet No. 42, Purwokerto</p>
+        </div>
+      `}
+
+      <div class="confirm-actions">
+        <button class="btn-primary-lg" onclick="navTo('pesanan')"><i class="ti ti-package"></i> Lihat Pesanan Saya</button>
+        <button class="btn-outline-lg" onclick="navTo('katalog')" style="color:var(--primary);border-color:var(--primary)"><i class="ti ti-backpack"></i> Lanjut Belanja</button>
+      </div>
+    </div>
+  `;
+}
+
+// --- ORDER TRACKING ---
+function renderOrders() {
+  const el = document.getElementById('orders-list');
+  const guestEl = document.getElementById('pesanan-guest');
+  const contentEl = document.getElementById('pesanan-content');
+  if (!el) return;
+
+  if (!currentUser) {
+    if (contentEl) contentEl.style.display = 'none';
+    if (guestEl) guestEl.style.display = 'block';
+    return;
+  }
+
+  if (contentEl) contentEl.style.display = 'block';
+  if (guestEl) guestEl.style.display = 'none';
+
+  // Filter orders for current user
+  const myOrders = orders.filter(o => String(o.customerId) === String(currentUser.id))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  if (myOrders.length === 0) {
+    el.innerHTML = `
+      <div class="cart-empty">
+        <i class="ti ti-package-off"></i>
+        <h3>Belum Ada Pesanan</h3>
+        <p>Anda belum pernah memesan. Yuk mulai sewa alat kemping!</p>
+        <button class="btn-primary-lg" onclick="navTo('katalog')"><i class="ti ti-backpack"></i> Lihat Katalog</button>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = myOrders.map(order => {
+    const statusClass = getStatusClass(order.status);
+    const date = new Date(order.createdAt).toLocaleDateString('id-ID', {
+      day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+    const itemNames = order.items.map(i => i.nama).join(', ');
+
+    return `
+      <div class="order-card">
+        <div class="order-card-header">
+          <div class="order-id-badge">${order.id}</div>
+          <span class="badge-status ${statusClass}">${order.status}</span>
+        </div>
+        <div class="order-card-body">
+          <div class="order-items-preview">
+            <i class="ti ti-backpack"></i> ${itemNames}
+          </div>
+          <div class="order-card-meta">
+            <span><i class="ti ti-calendar"></i> ${date}</span>
+            <span><i class="ti ti-credit-card"></i> ${order.metodeBayar}</span>
+          </div>
+        </div>
+        <div class="order-card-footer">
+          <div class="order-total">
+            <span>Total</span>
+            <strong>${idr(order.totalBiaya)}</strong>
+          </div>
+          <div class="order-timeline">
+            ${renderTimeline(order.status)}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function getStatusClass(status) {
+  switch(status) {
+    case 'Menunggu Pembayaran': return 'pending';
+    case 'Menunggu Konfirmasi': return 'waiting';
+    case 'Dikonfirmasi': return 'confirmed';
+    case 'Diambil': return 'active';
+    case 'Dikembalikan': return 'done';
+    case 'Dibatalkan': return 'cancelled';
+    default: return 'pending';
+  }
+}
+
+function renderTimeline(currentStatus) {
+  const steps = ['Dipesan', 'Dibayar', 'Dikonfirmasi', 'Diambil', 'Dikembalikan'];
+  const statusMap = {
+    'Menunggu Pembayaran': 0,
+    'Menunggu Konfirmasi': 1,
+    'Dikonfirmasi': 2,
+    'Diambil': 3,
+    'Dikembalikan': 4,
+    'Dibatalkan': -1
+  };
+  const currentStep = statusMap[currentStatus] ?? 0;
+
+  if (currentStep === -1) {
+    return '<div class="timeline-cancelled"><i class="ti ti-x"></i> Pesanan Dibatalkan</div>';
+  }
+
+  return `<div class="timeline-steps">
+    ${steps.map((step, idx) => `
+      <div class="timeline-step ${idx <= currentStep ? 'done' : ''} ${idx === currentStep ? 'current' : ''}">
+        <div class="timeline-dot"></div>
+        <span>${step}</span>
+      </div>
+    `).join('')}
+  </div>`;
+}
+
+// --- LOCAL ORDER STORAGE ---
+function saveOrdersLocal() {
+  localStorage.setItem('camptrack_orders', JSON.stringify(orders));
+}
+function loadOrdersLocal() {
+  const saved = localStorage.getItem('camptrack_orders');
+  if (saved) { try { orders = JSON.parse(saved); } catch(e) { orders = []; } }
 }
 
 // --- FILTER BY CATEGORY (from beranda) ---
@@ -628,7 +973,7 @@ function filterByCategory(category) {
 // --- HASH ROUTING ---
 function handleHash() {
   const hash = window.location.hash.replace('#', '') || 'beranda';
-  const validPages = ['beranda', 'katalog', 'keranjang', 'pesanan', 'login', 'profil'];
+  const validPages = ['beranda', 'katalog', 'keranjang', 'pesanan', 'login', 'profil', 'checkout'];
   if (validPages.includes(hash)) {
     navTo(hash);
   }
@@ -652,6 +997,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load cart and wishlist from localStorage
   loadCartLocal();
   loadWishlistLocal();
+  loadOrdersLocal();
 
   // Load catalog data from API
   loadCatalog();
