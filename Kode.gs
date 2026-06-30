@@ -289,6 +289,17 @@ function doPost(e) {
               break;
             }
           }
+          
+          // SYNC: Update status pesanan online jika semua item sudah dikembalikan
+          // Cek catatan transaksi untuk menemukan ID pesanan terkait
+          var catatanTx = String(dataTx[i][11] || ''); // kolom catatan (index 11)
+          if (catatanTx.indexOf('Pesanan Online:') !== -1) {
+            var orderId = catatanTx.replace('Pesanan Online:', '').trim();
+            if (orderId) {
+              syncOrderStatusAfterReturn(ss, orderId);
+            }
+          }
+          
           return memberikanResponse({ status: "success", message: "Pengembalian berhasil diproses!" });
         }
       }
@@ -401,9 +412,23 @@ function doPost(e) {
       
       for (var i = 1; i < dataPesanan.length; i++) {
         if (String(dataPesanan[i][0]) === String(payload.idPesanan)) {
-          // Update status menjadi "Dibatalkan" (kolom 9)
           sheetPesanan.getRange(i + 1, 9).setValue("Dibatalkan");
           return memberikanResponse({status: "success", message: "Pesanan " + payload.idPesanan + " ditolak."});
+        }
+      }
+      return memberikanResponse({status: "error", message: "Pesanan tidak ditemukan."});
+    }
+
+    // --- 3C. TANDAI PESANAN DIAMBIL ---
+    else if (payload.action === "ambil_pesanan") {
+      var sheetPesanan = ss.getSheetByName("Pesanan");
+      var dataPesanan = sheetPesanan.getDataRange().getValues();
+      
+      for (var i = 1; i < dataPesanan.length; i++) {
+        if (String(dataPesanan[i][0]) === String(payload.idPesanan)) {
+          // Update status_pesanan ke "Diambil" (kolom 9)
+          sheetPesanan.getRange(i + 1, 9).setValue("Diambil");
+          return memberikanResponse({status: "success", message: "Pesanan " + payload.idPesanan + " ditandai sebagai diambil."});
         }
       }
       return memberikanResponse({status: "error", message: "Pesanan tidak ditemukan."});
@@ -416,5 +441,53 @@ function doPost(e) {
     
   } catch (error) {
     return memberikanResponse({ status: "error", message: error.toString() });
+  }
+}
+
+
+
+// ==========================================
+// HELPER: Sinkronisasi Status Pesanan Setelah Pengembalian
+// Cek apakah SEMUA item dari pesanan sudah dikembalikan
+// Jika ya → update status pesanan ke "Dikembalikan"
+// ==========================================
+function syncOrderStatusAfterReturn(ss, orderId) {
+  try {
+    var sheetTransaksi = ss.getSheetByName("Transaksi");
+    var sheetPesanan = ss.getSheetByName("Pesanan");
+    var dataTx = sheetTransaksi.getDataRange().getValues();
+    
+    // Cari semua transaksi yang berasal dari pesanan ini
+    var relatedTx = [];
+    for (var i = 1; i < dataTx.length; i++) {
+      var catatan = String(dataTx[i][11] || '');
+      if (catatan.indexOf(orderId) !== -1) {
+        relatedTx.push({
+          status: String(dataTx[i][10] || '') // kolom status_transaksi (index 10)
+        });
+      }
+    }
+    
+    // Jika tidak ada transaksi terkait, skip
+    if (relatedTx.length === 0) return;
+    
+    // Cek apakah SEMUA transaksi sudah berstatus "Dikembalikan" atau "Terlambat"
+    var allReturned = relatedTx.every(function(tx) {
+      return tx.status === 'Dikembalikan' || tx.status === 'Terlambat';
+    });
+    
+    if (allReturned) {
+      // Update status pesanan ke "Dikembalikan"
+      var dataPesanan = sheetPesanan.getDataRange().getValues();
+      for (var j = 1; j < dataPesanan.length; j++) {
+        if (String(dataPesanan[j][0]) === String(orderId)) {
+          sheetPesanan.getRange(j + 1, 9).setValue("Dikembalikan");
+          break;
+        }
+      }
+    }
+  } catch(e) {
+    // Silent fail - jangan sampai mengganggu proses pengembalian utama
+    Logger.log("syncOrderStatus error: " + e.toString());
   }
 }
