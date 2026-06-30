@@ -59,6 +59,7 @@ function navTo(page) {
   if (page === 'beranda') renderPopular();
   if (page === 'keranjang') renderCart();
   if (page === 'pesanan') renderOrders();
+  if (page === 'profil') { updateProfilStats(); fetchMyOrders(); }
 }
 
 
@@ -906,7 +907,82 @@ function renderOrders() {
   if (contentEl) contentEl.style.display = 'block';
   if (guestEl) guestEl.style.display = 'none';
 
-  // Filter orders for current user
+  // FETCH FRESH DATA dari API (bukan hanya dari localStorage!)
+  el.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--text-muted);">
+    <div class="spinner-loader" style="width:30px;height:30px;border-width:3px;margin:0 auto 0.75rem"></div>
+    Memuat pesanan...
+  </div>`;
+
+  fetchMyOrders();
+}
+
+// Fetch pesanan terbaru dari server (sinkronisasi status)
+async function fetchMyOrders() {
+  const el = document.getElementById('orders-list');
+  if (!el || !currentUser) return;
+
+  try {
+    const response = await fetch(`${API_URL}?page=orders`);
+    const result = await response.json();
+
+    if (result.status === 'success' && result.orders) {
+      // Update local orders dengan data dari server
+      const serverOrders = result.orders
+        .filter(o => {
+          const custId = o.id_customer || o.idCustomer || o.customerId || '';
+          return String(custId) === String(currentUser.id);
+        })
+        .map(o => ({
+          id: o.id_pesanan || o.idPesanan || o.id || '',
+          customerId: o.id_customer || o.idCustomer || o.customerId || '',
+          customerName: o.nama_pemesan || o.namaPemesan || o.customerName || '',
+          items: parseOrderItems(o.detail_items || o.detailItems || o.items || '[]'),
+          totalBiaya: Number(o.total_biaya || o.totalBiaya || 0),
+          metodeBayar: o.metode_bayar || o.metodeBayar || '',
+          catatan: o.catatan || '',
+          status: o.status_pesanan || o.statusPesanan || o.status || 'Menunggu Pembayaran',
+          statusBayar: o.status_bayar || o.statusBayar || 'Belum Bayar',
+          createdAt: o.created_at || o.createdAt || ''
+        }));
+
+      // Merge: server data overrides local data (server = source of truth)
+      serverOrders.forEach(serverOrder => {
+        const localIdx = orders.findIndex(lo => lo.id === serverOrder.id);
+        if (localIdx !== -1) {
+          orders[localIdx] = serverOrder; // Update status dari server
+        } else {
+          orders.push(serverOrder); // Order baru dari server
+        }
+      });
+
+      saveOrdersLocal();
+      displayOrders();
+      updateProfilStats(); // Update profil stats setelah data fresh
+    } else {
+      // Fallback: tampilkan data lokal
+      displayOrders();
+    }
+  } catch (error) {
+    console.error('Fetch orders error:', error);
+    // Fallback: tampilkan data lokal
+    displayOrders();
+  }
+}
+
+// Parse items (bisa JSON string atau sudah array)
+function parseOrderItems(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string' && raw.trim()) {
+    try { return JSON.parse(raw); } catch(e) { return []; }
+  }
+  return [];
+}
+
+// Render daftar pesanan ke layar
+function displayOrders() {
+  const el = document.getElementById('orders-list');
+  if (!el || !currentUser) return;
+
   const myOrders = orders.filter(o => String(o.customerId) === String(currentUser.id))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
@@ -923,10 +999,11 @@ function renderOrders() {
 
   el.innerHTML = myOrders.map(order => {
     const statusClass = getStatusClass(order.status);
-    const date = new Date(order.createdAt).toLocaleDateString('id-ID', {
+    const date = order.createdAt ? new Date(order.createdAt).toLocaleDateString('id-ID', {
       day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
-    const itemNames = order.items.map(i => i.nama).join(', ');
+    }) : '-';
+    const items = parseOrderItems(order.items);
+    const itemNames = items.map(i => i.nama || i.name || 'Barang').join(', ');
 
     return `
       <div class="order-card">
@@ -936,7 +1013,7 @@ function renderOrders() {
         </div>
         <div class="order-card-body">
           <div class="order-items-preview">
-            <i class="ti ti-backpack"></i> ${itemNames}
+            <i class="ti ti-backpack"></i> ${itemNames || 'Barang pesanan'}
           </div>
           <div class="order-card-meta">
             <span><i class="ti ti-calendar"></i> ${date}</span>
@@ -1001,6 +1078,25 @@ function saveOrdersLocal() {
 function loadOrdersLocal() {
   const saved = localStorage.getItem('camptrack_orders');
   if (saved) { try { orders = JSON.parse(saved); } catch(e) { orders = []; } }
+}
+
+// --- PROFIL STATISTICS ---
+function updateProfilStats() {
+  if (!currentUser) return;
+
+  const myOrders = orders.filter(o => String(o.customerId) === String(currentUser.id));
+
+  // Total Pesanan
+  const totalOrders = myOrders.length;
+  const statOrder = document.getElementById('stat-total-order');
+  if (statOrder) statOrder.textContent = totalOrders;
+
+  // Total Pengeluaran (hanya yang bukan Dibatalkan)
+  const totalSpend = myOrders
+    .filter(o => o.status !== 'Dibatalkan')
+    .reduce((sum, o) => sum + (Number(o.totalBiaya) || 0), 0);
+  const statSpend = document.getElementById('stat-total-spend');
+  if (statSpend) statSpend.textContent = idr(totalSpend);
 }
 
 // --- FILTER BY CATEGORY (from beranda) ---
@@ -1311,6 +1407,7 @@ function restoreSession() {
     try {
       currentUser = JSON.parse(saved);
       updateUIForLoggedIn();
+      updateProfilStats();
     } catch (e) {
       localStorage.removeItem('camptrack_user');
       currentUser = null;
