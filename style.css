@@ -221,3 +221,21 @@ select.filter-sel:focus{border-color:var(--c3)}
 .info-row{display:flex;gap:.5rem;align-items:center;font-size:13px;color:var(--muted);margin-bottom:.5rem}
 .info-row i{color:var(--c3);font-size:16px}
 .info-row b{color:var(--c1)}
+
+
+
+/* --- Nav Badge for Online Orders --- */
+.nav-badge {
+  background: #e76f51;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  margin-left: auto;
+}

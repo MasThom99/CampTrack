@@ -71,6 +71,7 @@ function nav(page) {
   if(page==='kembali') renderKembali();
   if(page==='riwayat') renderRiwayat();
   if(page==='qr') renderQR();
+  if(page==='orders') loadOnlineOrders();
 }
 
 // LOGIN
@@ -760,6 +761,223 @@ async function markPaid(){
 }
 
 // INIT
-document.querySelector('[onclick="openModal(\'modal-aset\')"]') && null;
+document.querySelectorAll('.nav-item').forEach(n => {
+  n.addEventListener('click', () => {});
+});
+
+/* ========================================
+   PESANAN ONLINE MODULE
+   Integrasi Admin ↔ Customer Portal
+   ======================================== */
+
+// --- LOAD PESANAN ONLINE DARI API ---
+function loadOnlineOrders() {
+  const container = document.getElementById("admin-orders-list");
+  const badge = document.getElementById("admin-order-badge");
+
+  if (!container) return;
+  container.innerHTML = `<div style="text-align:center; grid-column:1/-1; padding:2rem; color:var(--muted);">
+    <div class="spinner-loader" style="width:30px;height:30px;border-width:3px;margin:0 auto 0.75rem;border-color:#e2ede5;border-top-color:#2d6a4f;"></div>
+    Mengambil pesanan online...
+  </div>`;
+
+  fetch(`${API_URL}?page=orders`)
+    .then(res => res.json())
+    .then(response => {
+      // API bisa return response.orders ATAU kita ambil dari format customer portal
+      let ordersArray = response.orders || response.data || [];
+
+      // Update badge
+      if (badge) {
+        const pendingCount = ordersArray.filter(o => {
+          const st = o.status_pesanan || o.statusPesanan || o.status || '';
+          return st !== 'Dikonfirmasi' && st !== 'Diambil' && st !== 'Dikembalikan' && st !== 'Dibatalkan';
+        }).length;
+
+        if (pendingCount > 0) {
+          badge.textContent = pendingCount;
+          badge.style.display = 'inline-flex';
+        } else {
+          badge.style.display = 'none';
+        }
+      }
+
+      if (ordersArray.length === 0) {
+        container.innerHTML = `
+          <div style="text-align:center; grid-column:1/-1; padding:3rem; color:var(--muted);">
+            <i class="ti ti-box-off" style="font-size:3rem; display:block; margin-bottom:0.75rem; color:var(--border);"></i>
+            <p style="font-size:14px;">Tidak ada pesanan online saat ini.</p>
+            <p style="font-size:12px; color:var(--muted);">Pesanan dari Customer Portal akan muncul di sini.</p>
+          </div>`;
+        return;
+      }
+
+      // Render pesanan
+      container.innerHTML = ordersArray.map(order => {
+        // Normalisasi field (support berbagai format dari Google Sheets)
+        const idPesanan = order.id_pesanan || order.idPesanan || order.id || 'ORD-???';
+        const namaPemesan = order.nama_pemesan || order.namaPemesan || order.customerName || order.nama || 'Pelanggan';
+        const noHp = order.no_hp || order.noHp || order.customerHp || order.hp || '-';
+        const email = order.email || order.customerEmail || '-';
+        const metodeBayar = order.metode_bayar || order.metodeBayar || 'QRIS';
+        const catatan = order.catatan || '-';
+        const totalBiaya = Number(order.total_biaya || order.totalBiaya || 0);
+        const statusPesanan = order.status_pesanan || order.statusPesanan || order.status || 'Menunggu';
+        const statusBayar = order.status_bayar || order.statusBayar || 'Belum Bayar';
+        const tglPesan = order.created_at || order.createdAt || order.tgl_pesan || '';
+
+        // Parse items (bisa JSON string atau sudah array)
+        let itemsHtml = '';
+        const rawItems = order.detail_items || order.detailItems || order.items;
+        if (rawItems) {
+          try {
+            const items = typeof rawItems === 'string' ? JSON.parse(rawItems) : rawItems;
+            if (Array.isArray(items)) {
+              itemsHtml = items.map(it =>
+                `<li>${it.nama || it.name || 'Barang'} ${it.hari ? `<small style="color:var(--muted)">(${it.hari} hari)</small>` : ''}</li>`
+              ).join('');
+            } else {
+              itemsHtml = `<li>${rawItems}</li>`;
+            }
+          } catch(e) {
+            itemsHtml = `<li>${rawItems}</li>`;
+          }
+        } else {
+          itemsHtml = '<li><em style="color:var(--muted)">Detail item tidak tersedia</em></li>';
+        }
+
+        // Status color
+        const stColor = statusPesanan.includes('Menunggu') ? '#f4a261' :
+                        statusPesanan === 'Dikonfirmasi' ? '#2d6a4f' :
+                        statusPesanan === 'Dibatalkan' ? '#e63946' : '#6b8f7b';
+
+        const bayarColor = statusBayar === 'Lunas' ? '#2d6a4f' : '#e63946';
+
+        return `
+          <div class="card" style="padding:1.25rem; border-radius:var(--rad2); display:flex; flex-direction:column; gap:0.6rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-family:'Syne',sans-serif; font-weight:700; font-size:13px; color:var(--c1); background:var(--c5); padding:0.2rem 0.6rem; border-radius:6px;">${idPesanan}</span>
+              <span style="background:${stColor}; color:white; font-size:11px; padding:3px 10px; border-radius:12px; font-weight:700;">${statusPesanan}</span>
+            </div>
+            <div>
+              <h4 style="margin:0; font-size:15px; color:var(--c1);">${namaPemesan}</h4>
+              <p style="font-size:12px; color:var(--muted); margin:0.2rem 0 0;"><i class="ti ti-phone"></i> ${noHp} ${email !== '-' ? `· <i class="ti ti-mail"></i> ${email}` : ''}</p>
+            </div>
+
+            <div style="background:var(--c5); padding:0.75rem; border-radius:8px;">
+              <span style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:0.25rem;">Barang Disewa:</span>
+              <ul style="padding-left:1.25rem; margin:0; font-size:13px; color:var(--c1);">${itemsHtml}</ul>
+            </div>
+
+            <div style="display:flex; gap:1rem; font-size:12px; color:var(--muted); flex-wrap:wrap;">
+              <span><i class="ti ti-credit-card"></i> ${metodeBayar}</span>
+              <span style="color:${bayarColor}; font-weight:600;"><i class="ti ti-coin"></i> ${statusBayar}</span>
+              ${tglPesan ? `<span><i class="ti ti-calendar"></i> ${fmtDT(tglPesan)}</span>` : ''}
+            </div>
+
+            ${catatan !== '-' ? `<p style="font-size:12px; margin:0; color:var(--muted);"><i class="ti ti-note"></i> <em>${catatan}</em></p>` : ''}
+
+            <div style="border-top:1px solid var(--border); padding-top:0.75rem; margin-top:auto; display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <small style="color:var(--muted);">Total Tagihan</small><br>
+                <strong style="font-size:18px; color:var(--c2); font-family:'Syne',sans-serif;">${idr(totalBiaya)}</strong>
+              </div>
+              ${statusPesanan.includes('Menunggu') ? `
+                <div style="display:flex; gap:0.5rem;">
+                  <button class="btn btn-sm btn-outline" onclick="tolakPesananOnline('${idPesanan}')" style="color:#e63946; border-color:#e63946;">
+                    <i class="ti ti-x"></i> Tolak
+                  </button>
+                  <button class="btn btn-sm btn-primary" onclick="terimaPesananOnline('${idPesanan}')">
+                    <i class="ti ti-check"></i> Konfirmasi
+                  </button>
+                </div>
+              ` : `
+                <span style="font-size:12px; color:var(--muted);"><i class="ti ti-circle-check"></i> Sudah diproses</span>
+              `}
+            </div>
+          </div>
+        `;
+      }).join('');
+    })
+    .catch(err => {
+      console.error("Load Orders Error:", err);
+      container.innerHTML = `
+        <div style="text-align:center; grid-column:1/-1; padding:2rem;">
+          <i class="ti ti-alert-triangle" style="font-size:2.5rem; color:#e63946; display:block; margin-bottom:0.5rem;"></i>
+          <p style="color:#e63946; font-size:14px; font-weight:600;">Gagal memuat pesanan online</p>
+          <p style="font-size:12px; color:var(--muted);">Pastikan Google Apps Script sudah handle endpoint <code>?page=orders</code></p>
+          <button class="btn btn-sm btn-outline" onclick="loadOnlineOrders()" style="margin-top:0.75rem"><i class="ti ti-refresh"></i> Coba Lagi</button>
+        </div>`;
+    });
+}
+
+// --- KONFIRMASI PESANAN ---
+async function terimaPesananOnline(idPesanan) {
+  if (!confirm(`Konfirmasi pesanan ${idPesanan}?\n\nPesanan akan diubah statusnya menjadi "Dikonfirmasi" dan barang akan dicatat sebagai dipinjam.`)) return;
+
+  document.getElementById('global-loader').style.display = 'flex';
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        action: "terima_pesanan",
+        idPesanan: idPesanan
+      }),
+      redirect: "follow"
+    });
+
+    const result = await response.json();
+
+    if (result.status === "success") {
+      alert('✅ Pesanan ' + idPesanan + ' berhasil dikonfirmasi!\nBarang akan otomatis tercatat sebagai dipinjam.');
+      loadOnlineOrders(); // Refresh list
+      await loadInitialData(); // Sinkronkan data aset & transaksi
+    } else {
+      alert('❌ Gagal: ' + (result.message || 'Error tidak diketahui'));
+    }
+  } catch (error) {
+    console.error("Confirm Order Error:", error);
+    alert('Terjadi kesalahan jaringan.');
+  } finally {
+    document.getElementById('global-loader').style.display = 'none';
+  }
+}
+
+// --- TOLAK PESANAN ---
+async function tolakPesananOnline(idPesanan) {
+  const alasan = prompt(`Alasan menolak pesanan ${idPesanan}:`, 'Barang tidak tersedia');
+  if (alasan === null) return; // User cancelled
+
+  document.getElementById('global-loader').style.display = 'flex';
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        action: "tolak_pesanan",
+        idPesanan: idPesanan,
+        alasan: alasan
+      }),
+      redirect: "follow"
+    });
+
+    const result = await response.json();
+
+    if (result.status === "success") {
+      alert('Pesanan ' + idPesanan + ' ditolak.');
+      loadOnlineOrders();
+    } else {
+      alert('❌ Gagal: ' + (result.message || 'Error'));
+    }
+  } catch (error) {
+    console.error("Reject Order Error:", error);
+    alert('Terjadi kesalahan jaringan.');
+  } finally {
+    document.getElementById('global-loader').style.display = 'none';
+  }
+}ctor('[onclick="openModal(\'modal-aset\')"]') && null;
 document.getElementById('page-aset').querySelector('.btn-primary').onclick=openAddAset;
 renderDashboard();
