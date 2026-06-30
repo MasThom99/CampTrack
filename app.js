@@ -892,6 +892,14 @@ function loadOnlineOrders() {
                     <i class="ti ti-check"></i> Konfirmasi
                   </button>
                 </div>
+              ` : statusPesanan === 'Dikonfirmasi' ? `
+                <button class="btn btn-sm btn-primary" onclick="tandaiDiambil('${idPesanan}')" style="background:#40916c;">
+                  <i class="ti ti-hand-grab"></i> Tandai Diambil
+                </button>
+              ` : statusPesanan === 'Diambil' ? `
+                <span style="font-size:12px; color:var(--c3); font-weight:600;"><i class="ti ti-clock"></i> Sedang Dipinjam</span>
+              ` : statusPesanan === 'Dikembalikan' ? `
+                <span style="font-size:12px; color:var(--muted);"><i class="ti ti-circle-check"></i> Selesai</span>
               ` : `
                 <span style="font-size:12px; color:var(--muted);"><i class="ti ti-circle-check"></i> Sudah diproses</span>
               `}
@@ -979,9 +987,40 @@ async function tolakPesananOnline(idPesanan) {
   } finally {
     document.getElementById('global-loader').style.display = 'none';
   }
-}ctor('[onclick="openModal(\'modal-aset\')"]') && null;
-document.getElementById('page-aset').querySelector('.btn-primary').onclick=openAddAset;
-renderDashboard();
+}
+
+// --- TANDAI PESANAN DIAMBIL ---
+async function tandaiDiambil(idPesanan) {
+  if (!confirm(`Tandai pesanan ${idPesanan} sebagai "Diambil"?\n\nIni berarti pelanggan sudah mengambil barangnya di toko.`)) return;
+
+  document.getElementById('global-loader').style.display = 'flex';
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        action: "ambil_pesanan",
+        idPesanan: idPesanan
+      }),
+      redirect: "follow"
+    });
+
+    const result = await response.json();
+
+    if (result.status === "success") {
+      alert('✅ Pesanan ' + idPesanan + ' ditandai sebagai diambil.');
+      loadOnlineOrders();
+    } else {
+      alert('❌ Gagal: ' + (result.message || 'Error'));
+    }
+  } catch (error) {
+    console.error("Ambil Order Error:", error);
+    alert('Terjadi kesalahan jaringan.');
+  } finally {
+    document.getElementById('global-loader').style.display = 'none';
+  }
+}
 
 
 
