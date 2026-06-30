@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CampTrack - Sewa Alat Kemping Online</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+  <link rel="stylesheet" href="customer.css">
+</head>
+<body>
+
+  <!-- LOADER -->
+  <div id="global-loader" class="global-loader">
+    <div class="spinner-loader"></div>
+    <span>Memuat katalog...</span>
+  </div>
+
+  <!-- NAVBAR -->
+  <header class="navbar">
+    <div class="navbar-inner">
+      <a href="customer.html" class="navbar-brand">
+        <i class="ti ti-tent"></i>
+        <span>CampTrack</span>
+      </a>
+      <nav class="navbar-nav desktop-nav">
+        <a href="#beranda" class="nav-link active" data-page="beranda">Beranda</a>
+        <a href="#katalog" class="nav-link" data-page="katalog">Katalog</a>
+        <a href="#pesanan" class="nav-link" data-page="pesanan">Pesanan</a>
+      </nav>
+      <div class="navbar-actions">
+        <button class="btn-icon cart-btn" onclick="navTo('keranjang')" aria-label="Keranjang">
+          <i class="ti ti-shopping-cart"></i>
+          <span class="cart-badge" id="cart-badge">0</span>
+        </button>
+        <!-- Guest state -->
+        <div id="nav-guest">
+          <button class="btn-cta-nav" onclick="navTo('login')">
+            <i class="ti ti-login"></i>
+            <span>Masuk</span>
+          </button>
+        </div>
+        <!-- Logged-in state -->
+        <div id="nav-user" style="display:none">
+          <button class="btn-user-nav" onclick="navTo('profil')">
+            <span class="user-avatar-sm" id="nav-avatar">?</span>
+            <span class="user-name-nav" id="nav-username">User</span>
+          </button>
+        </div>
+      </div>
+      <button class="btn-icon mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Menu">
+        <i class="ti ti-menu-2"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- MOBILE MENU OVERLAY -->
+  <div class="mobile-menu-overlay" id="mobile-menu" onclick="closeMobileMenu()">
+    <div class="mobile-menu" onclick="event.stopPropagation()">
+      <div class="mobile-menu-header">
+        <span class="navbar-brand"><i class="ti ti-tent"></i> CampTrack</span>
+        <button class="btn-icon" onclick="closeMobileMenu()"><i class="ti ti-x"></i></button>
+      </div>
+      <a href="#beranda" class="mobile-menu-link" onclick="navTo('beranda')"><i class="ti ti-home"></i> Beranda</a>
+      <a href="#katalog" class="mobile-menu-link" onclick="navTo('katalog')"><i class="ti ti-backpack"></i> Katalog</a>
+      <a href="#pesanan" class="mobile-menu-link" onclick="navTo('pesanan')"><i class="ti ti-package"></i> Pesanan Saya</a>
+      <a href="#profil" class="mobile-menu-link" onclick="navTo('profil')"><i class="ti ti-user"></i> Profil</a>
+      <div class="mobile-menu-divider"></div>
+      <div id="mobile-menu-guest">
+        <a href="#login" class="mobile-menu-link" onclick="navTo('login')"><i class="ti ti-login"></i> Masuk / Daftar</a>
+      </div>
+      <div id="mobile-menu-user" style="display:none">
+        <div class="mobile-menu-user-info" id="mobile-user-info">
+          <span class="user-avatar-sm">?</span>
+          <div>
+            <strong id="mobile-user-name">User</strong>
+            <small id="mobile-user-email">user@email.com</small>
+          </div>
+        </div>
+        <a href="#" class="mobile-menu-link" onclick="handleLogout()"><i class="ti ti-logout"></i> Keluar</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+
+    <!-- PAGE: BERANDA -->
+    <section class="page active" id="page-beranda">
+
+      <!-- HERO -->
+      <div class="hero">
+        <div class="hero-bg-icons">
+          <i class="ti ti-tent"></i>
+          <i class="ti ti-mountain"></i>
+          <i class="ti ti-campfire"></i>
+          <i class="ti ti-compass"></i>
+          <i class="ti ti-backpack"></i>
+        </div>
+        <div class="hero-content">
+          <span class="hero-badge"><i class="ti ti-star-filled"></i> Rental Terpercaya di Purwokerto</span>
+          <h1>Sewa Alat Kemping<br>Berkualitas & Terjangkau</h1>
+          <p>Lengkapi petualangan outdoor Anda dengan peralatan kemping premium. Pesan online, ambil di toko!</p>
+          <div class="hero-actions">
+            <button class="btn-primary-lg" onclick="navTo('katalog')">
+              <i class="ti ti-backpack"></i> Lihat Katalog
+            </button>
+            <button class="btn-outline-lg" onclick="navTo('pesanan')">
+              <i class="ti ti-search"></i> Cek Pesanan
+            </button>
+          </div>
+          <div class="hero-stats">
+            <div class="hero-stat">
+              <strong id="hero-total-items">50+</strong>
+              <span>Alat Tersedia</span>
+            </div>
+            <div class="hero-stat">
+              <strong>4.9</strong>
+              <span>Rating</span>
+            </div>
+            <div class="hero-stat">
+              <strong>500+</strong>
+              <span>Pelanggan</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- KATEGORI QUICK ACCESS -->
+      <div class="section">
+        <div class="section-header">
+          <h2><i class="ti ti-category"></i> Kategori</h2>
+          <button class="btn-text" onclick="navTo('katalog')">Lihat Semua <i class="ti ti-arrow-right"></i></button>
+        </div>
+        <div class="category-grid">
+          <div class="category-card" onclick="filterByCategory('Tenda & Bivak')">
+            <div class="category-icon"><i class="ti ti-tent"></i></div>
+            <span>Tenda & Bivak</span>
+          </div>
+          <div class="category-card" onclick="filterByCategory('Perlengkapan Tidur')">
+            <div class="category-icon"><i class="ti ti-bed"></i></div>
+            <span>Perlengkapan Tidur</span>
+          </div>
+          <div class="category-card" onclick="filterByCategory('Masak & Makan')">
+            <div class="category-icon"><i class="ti ti-flame"></i></div>
+            <span>Masak & Makan</span>
+          </div>
+          <div class="category-card" onclick="filterByCategory('Navigasi & Pencahayaan')">
+            <div class="category-icon"><i class="ti ti-bulb"></i></div>
+            <span>Navigasi & Cahaya</span>
+          </div>
+          <div class="category-card" onclick="filterByCategory('Pakaian & Footwear')">
+            <div class="category-icon"><i class="ti ti-shoe"></i></div>
+            <span>Pakaian & Footwear</span>
+          </div>
+          <div class="category-card" onclick="filterByCategory('Aksesoris')">
+            <div class="category-icon"><i class="ti ti-briefcase"></i></div>
+            <span>Aksesoris</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- BARANG POPULER (Preview) -->
+      <div class="section">
+        <div class="section-header">
+          <h2><i class="ti ti-flame"></i> Populer</h2>
+          <button class="btn-text" onclick="navTo('katalog')">Lihat Semua <i class="ti ti-arrow-right"></i></button>
+        </div>
+        <div class="catalog-grid" id="popular-grid">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+
+      <!-- INFO SECTION -->
+      <div class="section">
+        <div class="info-cards">
+          <div class="info-card">
+            <div class="info-icon"><i class="ti ti-shield-check"></i></div>
+            <h3>Barang Terjamin</h3>
+            <p>Semua alat dicek kondisinya sebelum disewakan</p>
+          </div>
+          <div class="info-card">
+            <div class="info-icon"><i class="ti ti-clock-24"></i></div>
+            <h3>Buka Setiap Hari</h3>
+            <p>Layanan pukul 08.00 - 21.00 WIB</p>
+          </div>
+          <div class="info-card">
+            <div class="info-icon"><i class="ti ti-credit-card"></i></div>
+            <h3>Pembayaran Mudah</h3>
+            <p>QRIS, Transfer, GoPay, OVO, DANA</p>
+          </div>
+          <div class="info-card">
+            <div class="info-icon"><i class="ti ti-map-pin"></i></div>
+            <h3>Lokasi Strategis</h3>
+            <p>Jl. Gunung Slamet No. 42, Purwokerto</p>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- PAGE: KATALOG -->
+    <section class="page" id="page-katalog">
+      <div class="page-top">
+        <h2 class="page-title"><i class="ti ti-backpack"></i> Katalog Alat Kemping</h2>
+        <p class="page-sub">Temukan peralatan terbaik untuk petualangan Anda</p>
+      </div>
+
+      <!-- SEARCH & FILTER BAR -->
+      <div class="filter-bar">
+        <div class="search-wrap">
+          <i class="ti ti-search"></i>
+          <input type="text" id="search-catalog" placeholder="Cari alat kemping..." oninput="renderCatalog()">
+        </div>
+        <select id="filter-category" onchange="renderCatalog()">
+          <option value="">Semua Kategori</option>
+          <option>Tenda & Bivak</option>
+          <option>Perlengkapan Tidur</option>
+          <option>Masak & Makan</option>
+          <option>Navigasi & Pencahayaan</option>
+          <option>Pakaian & Footwear</option>
+          <option>Aksesoris</option>
+        </select>
+        <select id="filter-sort" onchange="renderCatalog()">
+          <option value="nama">Nama A-Z</option>
+          <option value="harga-asc">Termurah</option>
+          <option value="harga-desc">Termahal</option>
+        </select>
+      </div>
+
+      <!-- RESULT INFO -->
+      <div class="result-info" id="result-info">Menampilkan 0 barang</div>
+
+      <!-- CATALOG GRID -->
+      <div class="catalog-grid" id="catalog-grid">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- EMPTY STATE -->
+      <div class="empty-state" id="catalog-empty" style="display:none">
+        <i class="ti ti-search-off"></i>
+        <h3>Tidak ditemukan</h3>
+        <p>Coba ubah kata kunci atau filter Anda</p>
+      </div>
+    </section>
+
+    <!-- PAGE: DETAIL BARANG -->
+    <section class="page" id="page-detail">
+      <div class="detail-top-bar">
+        <button class="btn-back" onclick="navTo('katalog')">
+          <i class="ti ti-arrow-left"></i> Kembali ke Katalog
+        </button>
+      </div>
+      <div class="detail-layout" id="detail-content">
+        <!-- Rendered by JS -->
+      </div>
+    </section>
+
+    <!-- PAGE: KERANJANG -->
+    <section class="page" id="page-keranjang">
+      <div class="page-top">
+        <h2 class="page-title"><i class="ti ti-shopping-cart"></i> Keranjang Saya</h2>
+        <p class="page-sub">Barang yang siap Anda sewa</p>
+      </div>
+
+      <!-- TABS: Cart / Wishlist -->
+      <div class="cart-tabs">
+        <button class="cart-tab-btn active" data-tab="cart" onclick="switchCartTab('cart')">
+          <i class="ti ti-shopping-cart"></i> Keranjang <span class="tab-count" id="tab-cart-count">0</span>
+        </button>
+        <button class="cart-tab-btn" data-tab="wishlist" onclick="switchCartTab('wishlist')">
+          <i class="ti ti-heart"></i> Wishlist <span class="tab-count" id="tab-wish-count">0</span>
+        </button>
+      </div>
+
+      <!-- TAB CONTENT: Cart -->
+      <div class="cart-tab-content active" id="tab-content-cart">
+        <div class="cart-layout">
+          <div class="cart-items" id="cart-items-list">
+            <!-- Rendered by JS -->
+          </div>
+          <div class="cart-summary-card" id="cart-summary">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB CONTENT: Wishlist -->
+      <div class="cart-tab-content" id="tab-content-wishlist">
+        <div class="wishlist-items" id="wishlist-items-list">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- PAGE: PESANAN -->
+    <section class="page" id="page-pesanan">
+      <div class="page-top">
+        <h2 class="page-title"><i class="ti ti-package"></i> Pesanan Saya</h2>
+        <p class="page-sub">Lacak status pesanan Anda</p>
+      </div>
+
+      <!-- LOGGED IN: Order list -->
+      <div id="pesanan-content">
+        <div class="orders-container" id="orders-list">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+
+      <!-- NOT LOGGED IN -->
+      <div id="pesanan-guest" style="display:none">
+        <div class="coming-soon">
+          <i class="ti ti-lock"></i>
+          <h3>Masuk untuk Melihat Pesanan</h3>
+          <p>Silakan login untuk melihat riwayat dan status pesanan Anda.</p>
+          <button class="btn-primary-lg" onclick="navTo('login')"><i class="ti ti-login"></i> Masuk</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAGE: CHECKOUT -->
+    <section class="page" id="page-checkout">
+      <div class="page-top">
+        <h2 class="page-title"><i class="ti ti-credit-card"></i> Checkout</h2>
+        <p class="page-sub">Konfirmasi dan selesaikan pesanan Anda</p>
+      </div>
+      <div id="checkout-content">
+        <!-- Rendered by JS -->
+      </div>
+    </section>
+
+    <!-- PAGE: LOGIN -->
+    <section class="page" id="page-login">
+      <div class="auth-container">
+        <div class="auth-card">
+          <div class="auth-header">
+            <div class="auth-logo"><i class="ti ti-tent"></i></div>
+            <h2 id="auth-title">Masuk ke CampTrack</h2>
+            <p id="auth-subtitle">Masuk untuk memesan alat kemping favorit Anda</p>
+          </div>
+
+          <!-- LOGIN FORM -->
+          <form id="form-login" class="auth-form" onsubmit="return handleLogin(event)">
+            <div class="form-group">
+              <label for="login-email"><i class="ti ti-mail"></i> Email atau No. HP</label>
+              <input type="text" id="login-email" placeholder="contoh@email.com atau 08xx" required>
+            </div>
+            <div class="form-group">
+              <label for="login-password"><i class="ti ti-lock"></i> Password</label>
+              <div class="password-wrap">
+                <input type="password" id="login-password" placeholder="Masukkan password" required>
+                <button type="button" class="toggle-pass" onclick="togglePassword('login-password', this)">
+                  <i class="ti ti-eye"></i>
+                </button>
+              </div>
+            </div>
+            <button type="submit" class="btn-auth-submit" id="btn-login">
+              <i class="ti ti-login"></i> Masuk
+            </button>
+          </form>
+
+          <!-- REGISTER FORM -->
+          <form id="form-register" class="auth-form" style="display:none" onsubmit="return handleRegister(event)">
+            <div class="form-group">
+              <label for="reg-nama"><i class="ti ti-user"></i> Nama Lengkap</label>
+              <input type="text" id="reg-nama" placeholder="Masukkan nama lengkap" required>
+            </div>
+            <div class="form-group">
+              <label for="reg-hp"><i class="ti ti-phone"></i> No. HP / WhatsApp</label>
+              <input type="tel" id="reg-hp" placeholder="08xxxxxxxxxx" required>
+            </div>
+            <div class="form-group">
+              <label for="reg-email"><i class="ti ti-mail"></i> Email</label>
+              <input type="email" id="reg-email" placeholder="contoh@email.com" required>
+            </div>
+            <div class="form-group">
+              <label for="reg-password"><i class="ti ti-lock"></i> Password</label>
+              <div class="password-wrap">
+                <input type="password" id="reg-password" placeholder="Min. 6 karakter" required minlength="6">
+                <button type="button" class="toggle-pass" onclick="togglePassword('reg-password', this)">
+                  <i class="ti ti-eye"></i>
+                </button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="reg-password2"><i class="ti ti-lock-check"></i> Konfirmasi Password</label>
+              <div class="password-wrap">
+                <input type="password" id="reg-password2" placeholder="Ulangi password" required minlength="6">
+                <button type="button" class="toggle-pass" onclick="togglePassword('reg-password2', this)">
+                  <i class="ti ti-eye"></i>
+                </button>
+              </div>
+            </div>
+            <button type="submit" class="btn-auth-submit" id="btn-register">
+              <i class="ti ti-user-plus"></i> Daftar Akun
+            </button>
+          </form>
+
+          <!-- AUTH FOOTER (toggle login/register) -->
+          <div class="auth-footer">
+            <p id="auth-toggle-text">
+              Belum punya akun?
+              <button type="button" class="btn-auth-toggle" onclick="toggleAuthForm('register')">Daftar sekarang</button>
+            </p>
+          </div>
+
+          <!-- DIVIDER -->
+          <div class="auth-divider">
+            <span>atau</span>
+          </div>
+
+          <!-- GUEST -->
+          <button class="btn-auth-guest" onclick="navTo('katalog')">
+            <i class="ti ti-backpack"></i> Lanjut Tanpa Login
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAGE: PROFIL -->
+    <section class="page" id="page-profil">
+      <div class="page-top">
+        <h2 class="page-title"><i class="ti ti-user"></i> Profil Saya</h2>
+        <p class="page-sub">Kelola akun Anda</p>
+      </div>
+
+      <!-- LOGGED IN STATE -->
+      <div class="profil-container" id="profil-content">
+        <div class="profil-card">
+          <div class="profil-avatar" id="profil-avatar">?</div>
+          <h3 class="profil-name" id="profil-name">-</h3>
+          <p class="profil-email" id="profil-email">-</p>
+          <div class="profil-badge"><i class="ti ti-circle-check"></i> Pelanggan Terdaftar</div>
+        </div>
+
+        <div class="profil-section">
+          <h4><i class="ti ti-edit"></i> Edit Profil</h4>
+          <form id="form-edit-profil" onsubmit="return handleEditProfil(event)">
+            <div class="form-group">
+              <label for="edit-nama">Nama Lengkap</label>
+              <input type="text" id="edit-nama" required>
+            </div>
+            <div class="form-group">
+              <label for="edit-hp">No. HP</label>
+              <input type="tel" id="edit-hp" required>
+            </div>
+            <div class="form-group">
+              <label for="edit-email">Email</label>
+              <input type="email" id="edit-email" required>
+            </div>
+            <button type="submit" class="btn-auth-submit">
+              <i class="ti ti-device-floppy"></i> Simpan Perubahan
+            </button>
+          </form>
+        </div>
+
+        <div class="profil-section">
+          <h4><i class="ti ti-lock"></i> Ganti Password</h4>
+          <form id="form-change-pass" onsubmit="return handleChangePassword(event)">
+            <div class="form-group">
+              <label for="old-pass">Password Lama</label>
+              <input type="password" id="old-pass" required>
+            </div>
+            <div class="form-group">
+              <label for="new-pass">Password Baru</label>
+              <input type="password" id="new-pass" required minlength="6">
+            </div>
+            <div class="form-group">
+              <label for="new-pass2">Konfirmasi Password Baru</label>
+              <input type="password" id="new-pass2" required minlength="6">
+            </div>
+            <button type="submit" class="btn-auth-submit">
+              <i class="ti ti-refresh"></i> Ganti Password
+            </button>
+          </form>
+        </div>
+
+        <div class="profil-section">
+          <h4><i class="ti ti-chart-bar"></i> Statistik</h4>
+          <div class="profil-stats">
+            <div class="profil-stat-item">
+              <i class="ti ti-shopping-cart"></i>
+              <div>
+                <strong id="stat-total-order">0</strong>
+                <span>Total Pesanan</span>
+              </div>
+            </div>
+            <div class="profil-stat-item">
+              <i class="ti ti-coin"></i>
+              <div>
+                <strong id="stat-total-spend">Rp 0</strong>
+                <span>Total Pengeluaran</span>
+              </div>
+            </div>
+            <div class="profil-stat-item">
+              <i class="ti ti-calendar"></i>
+              <div>
+                <strong id="stat-member-since">-</strong>
+                <span>Bergabung Sejak</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn-logout-profil" onclick="handleLogout()">
+          <i class="ti ti-logout"></i> Keluar dari Akun
+        </button>
+      </div>
+
+      <!-- NOT LOGGED IN STATE -->
+      <div class="coming-soon" id="profil-guest" style="display:none">
+        <i class="ti ti-user-circle"></i>
+        <h3>Anda Belum Masuk</h3>
+        <p>Silakan masuk atau daftar untuk melihat profil dan riwayat pesanan Anda.</p>
+        <button class="btn-primary-lg" onclick="navTo('login')"><i class="ti ti-login"></i> Masuk / Daftar</button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <div class="footer-logo"><i class="ti ti-tent"></i> CampTrack</div>
+        <p>Rental alat kemping terpercaya di Purwokerto. Lengkapi petualangan outdoor Anda!</p>
+      </div>
+      <div class="footer-links">
+        <h4>Navigasi</h4>
+        <a href="#beranda" onclick="navTo('beranda')">Beranda</a>
+        <a href="#katalog" onclick="navTo('katalog')">Katalog</a>
+        <a href="#pesanan" onclick="navTo('pesanan')">Pesanan</a>
+      </div>
+      <div class="footer-links">
+        <h4>Kontak</h4>
+        <p><i class="ti ti-map-pin"></i> Jl. Gunung Slamet No. 42, Purwokerto</p>
+        <p><i class="ti ti-phone"></i> (0281) 555-8890</p>
+        <p><i class="ti ti-clock"></i> 08.00 - 21.00 WIB</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 CampTrack. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <!-- BOTTOM NAV (Mobile) -->
+  <nav class="bottom-nav" id="bottom-nav">
+    <button class="bottom-nav-item active" onclick="navTo('beranda')" data-page="beranda">
+      <i class="ti ti-home"></i>
+      <span>Beranda</span>
+    </button>
+    <button class="bottom-nav-item" onclick="navTo('katalog')" data-page="katalog">
+      <i class="ti ti-backpack"></i>
+      <span>Katalog</span>
+    </button>
+    <button class="bottom-nav-item" onclick="navTo('keranjang')" data-page="keranjang">
+      <i class="ti ti-shopping-cart"></i>
+      <span>Keranjang</span>
+      <span class="bottom-cart-badge" id="bottom-cart-badge">0</span>
+    </button>
+    <button class="bottom-nav-item" onclick="navTo('pesanan')" data-page="pesanan">
+      <i class="ti ti-package"></i>
+      <span>Pesanan</span>
+    </button>
+    <button class="bottom-nav-item" onclick="navTo('profil')" data-page="profil">
+      <i class="ti ti-user"></i>
+      <span>Profil</span>
+    </button>
+  </nav>
+
+  <script src="customer.js"></script>
+</body>
+</html>
