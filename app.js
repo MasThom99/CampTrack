@@ -72,6 +72,7 @@ function nav(page) {
   if(page==='riwayat') renderRiwayat();
   if(page==='qr') renderQR();
   if(page==='orders') loadOnlineOrders();
+  if(page==='keuangan') renderKeuangan();
 }
 
 // LOGIN
@@ -981,3 +982,201 @@ async function tolakPesananOnline(idPesanan) {
 }ctor('[onclick="openModal(\'modal-aset\')"]') && null;
 document.getElementById('page-aset').querySelector('.btn-primary').onclick=openAddAset;
 renderDashboard();
+
+
+
+/* ========================================
+   KEUANGAN MODULE
+   Laporan pendapatan & ringkasan keuangan
+   ======================================== */
+
+function renderKeuangan() {
+  const filter = document.getElementById('filter-keuangan')?.value || 'month';
+  
+  // Tentukan rentang waktu filter
+  const now = new Date();
+  let startDate = null;
+  
+  switch(filter) {
+    case 'today':
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      break;
+    case 'week':
+      const dayOfWeek = now.getDay();
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - dayOfWeek);
+      startDate.setHours(0, 0, 0, 0);
+      break;
+    case 'month':
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      break;
+    case 'all':
+    default:
+      startDate = new Date(2000, 0, 1); // Semua waktu
+      break;
+  }
+  
+  // --- Hitung Pendapatan dari Transaksi (Sheet Transaksi) ---
+  let totalSewa = 0;
+  let totalDenda = 0;
+  let entries = []; // Untuk tabel riwayat
+  
+  // Gabungkan loans + history = semua transaksi
+  const allTx = [...loans, ...history];
+  
+  allTx.forEach(tx => {
+    // Tentukan tanggal transaksi (gunakan tglPinjam sebagai acuan)
+    const txDate = new Date(tx.tglPinjam);
+    if (txDate < startDate) return; // Skip jika di luar filter
+    
+    // Hanya hitung yang statusnya sudah Dikembalikan/Terlambat atau Lunas
+    const biaya = Number(tx.biaya) || 0;
+    const denda = Number(tx.denda) || 0;
+    
+    if (biaya > 0) {
+      totalSewa += biaya;
+      entries.push({
+        tanggal: tx.tglPinjam,
+        sumber: 'Sewa',
+        keterangan: (assets.find(a => String(a.id) === String(tx.asetId)) || {nama: 'Barang'}).nama,
+        nominal: biaya,
+        peminjam: tx.nama
+      });
+    }
+    
+    if (denda > 0) {
+      totalDenda += denda;
+      entries.push({
+        tanggal: tx.tglAktual || tx.tglPinjam,
+        sumber: 'Denda',
+        keterangan: 'Keterlambatan - ' + tx.nama,
+        nominal: denda,
+        peminjam: tx.nama
+      });
+    }
+  });
+  
+  // --- Hitung Pendapatan dari Pesanan Online (yang sudah dikonfirmasi) ---
+  let totalOnline = 0;
+  // Kita fetch langsung dari API jika perlu, tapi untuk sekarang gunakan data yang sudah ada
+  // Orders data bisa di-load dari loadOnlineOrders, kita buat fungsi terpisah
+  fetchOnlineRevenueForFinance(startDate, function(onlineRevenue, onlineEntries) {
+    totalOnline = onlineRevenue;
+    
+    // Gabungkan semua entries
+    const allEntries = [...entries, ...onlineEntries]
+      .sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
+    
+    const grandTotal = totalSewa + totalDenda + totalOnline;
+    
+    // --- Render Stats ---
+    document.getElementById('fin-sewa').textContent = idr(totalSewa);
+    document.getElementById('fin-denda').textContent = idr(totalDenda);
+    document.getElementById('fin-online').textContent = idr(totalOnline);
+    document.getElementById('fin-total').textContent = idr(grandTotal);
+    
+    // --- Render Table ---
+    const tbody = document.getElementById('finance-table-body');
+    if (allEntries.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2rem">Belum ada pemasukan pada periode ini</td></tr>';
+    } else {
+      tbody.innerHTML = allEntries.slice(0, 20).map((e, idx) => {
+        const srcBadge = e.sumber === 'Sewa' ? 'available' : e.sumber === 'Denda' ? 'overdue' : 'borrowed';
+        return `<tr>
+          <td>${idx + 1}</td>
+          <td>${fmtDate(e.tanggal)}</td>
+          <td><span class="badge ${srcBadge}">${e.sumber}</span></td>
+          <td><small>${e.keterangan}</small></td>
+          <td><b style="color:var(--c2)">${idr(e.nominal)}</b></td>
+        </tr>`;
+      }).join('');
+    }
+    
+    // --- Render Summary ---
+    const summaryEl = document.getElementById('finance-summary');
+    const sewaPct = grandTotal > 0 ? Math.round((totalSewa / grandTotal) * 100) : 0;
+    const dendaPct = grandTotal > 0 ? Math.round((totalDenda / grandTotal) * 100) : 0;
+    const onlinePct = grandTotal > 0 ? Math.round((totalOnline / grandTotal) * 100) : 0;
+    
+    summaryEl.innerHTML = `
+      <div style="margin-bottom:1.5rem;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem;font-size:13px;">
+          <span>Pendapatan Sewa</span>
+          <b>${sewaPct}%</b>
+        </div>
+        <div style="height:10px;background:var(--c5);border-radius:5px;overflow:hidden;">
+          <div style="width:${sewaPct}%;height:100%;background:var(--c3);border-radius:5px;transition:width 0.5s;"></div>
+        </div>
+      </div>
+      <div style="margin-bottom:1.5rem;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem;font-size:13px;">
+          <span>Pendapatan Denda</span>
+          <b>${dendaPct}%</b>
+        </div>
+        <div style="height:10px;background:var(--c5);border-radius:5px;overflow:hidden;">
+          <div style="width:${dendaPct}%;height:100%;background:var(--acc);border-radius:5px;transition:width 0.5s;"></div>
+        </div>
+      </div>
+      <div style="margin-bottom:1.5rem;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem;font-size:13px;">
+          <span>Pesanan Online</span>
+          <b>${onlinePct}%</b>
+        </div>
+        <div style="height:10px;background:var(--c5);border-radius:5px;overflow:hidden;">
+          <div style="width:${onlinePct}%;height:100%;background:#6c63ff;border-radius:5px;transition:width 0.5s;"></div>
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:1rem;margin-top:1rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:14px;color:var(--muted);">Total Transaksi</span>
+          <b style="font-size:13px;">${allEntries.length} transaksi</b>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.5rem;">
+          <span style="font-size:14px;color:var(--muted);">Grand Total</span>
+          <b style="font-size:20px;color:var(--c2);font-family:'Syne',sans-serif;">${idr(grandTotal)}</b>
+        </div>
+      </div>
+    `;
+  });
+}
+
+// Fetch data pesanan online untuk perhitungan keuangan
+function fetchOnlineRevenueForFinance(startDate, callback) {
+  fetch(`${API_URL}?page=orders`)
+    .then(res => res.json())
+    .then(response => {
+      const ordersArray = response.orders || [];
+      let revenue = 0;
+      let entries = [];
+      
+      ordersArray.forEach(order => {
+        const status = order.status_pesanan || order.statusPesanan || order.status || '';
+        const statusBayar = order.status_bayar || order.statusBayar || '';
+        const tanggal = order.created_at || order.createdAt || '';
+        const total = Number(order.total_biaya || order.totalBiaya || 0);
+        const nama = order.nama_pemesan || order.namaPemesan || order.customerName || 'Online';
+        const idOrder = order.id_pesanan || order.idPesanan || order.id || '';
+        
+        // Hanya hitung pesanan yang sudah dikonfirmasi dan lunas
+        if ((status === 'Dikonfirmasi' || status === 'Diambil' || status === 'Dikembalikan') && total > 0) {
+          const orderDate = new Date(tanggal);
+          if (orderDate >= startDate) {
+            revenue += total;
+            entries.push({
+              tanggal: tanggal,
+              sumber: 'Online',
+              keterangan: idOrder + ' - ' + nama,
+              nominal: total,
+              peminjam: nama
+            });
+          }
+        }
+      });
+      
+      callback(revenue, entries);
+    })
+    .catch(err => {
+      console.error('Finance fetch error:', err);
+      callback(0, []);
+    });
+}

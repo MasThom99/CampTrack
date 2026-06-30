@@ -1446,3 +1446,16 @@ img { max-width: 100%; display: block; }
   .btn-primary-lg, .btn-outline-lg { width: 100%; justify-content: center; }
   .order-confirm { padding: 1.5rem 1rem; }
 }
+
+
+
+/* --- REFRESH BUTTON --- */
+.btn-refresh-catalog {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.5rem 1rem; border-radius: var(--radius);
+  border: 1.5px solid var(--border); color: var(--primary);
+  font-size: 13px; font-weight: 600; transition: all 0.2s;
+  background: var(--surface);
+}
+.btn-refresh-catalog:hover { background: var(--primary-bg); border-color: var(--primary); }
+.btn-refresh-catalog:disabled { opacity: 0.6; cursor: not-allowed; }
