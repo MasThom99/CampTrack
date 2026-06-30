@@ -116,6 +116,51 @@ function showError(msg) {
   alert(msg);
 }
 
+// --- REFRESH CATALOG (manual + auto) ---
+async function refreshCatalog() {
+  const btn = document.getElementById('btn-refresh-catalog');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-refresh" style="animation:spin 0.8s linear infinite"></i> Memuat...';
+  }
+  
+  try {
+    const response = await fetch(`${API_URL}?page=dashboard`);
+    const result = await response.json();
+
+    if (result.status === 'success') {
+      assets = result.assets.map(item => ({
+        id: item.id_aset,
+        kode: item.kode,
+        nama: item.nama_barang,
+        kat: item.kategori,
+        tarif: item.tarif,
+        status: item.status,
+        foto: item.foto,
+        desc: item.deskripsi
+      }));
+
+      const heroTotal = document.getElementById('hero-total-items');
+      if (heroTotal) {
+        const available = assets.filter(a => a.status === 'Tersedia').length;
+        heroTotal.textContent = available + '+';
+      }
+
+      renderCatalog();
+      renderPopular();
+      showToast('Katalog berhasil diperbarui!', 'success');
+    }
+  } catch (error) {
+    console.error('Refresh Error:', error);
+    showToast('Gagal refresh. Periksa koneksi.', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-refresh"></i> Refresh';
+    }
+  }
+}
+
 
 // --- RENDER POPULAR (Beranda) ---
 function renderPopular() {
@@ -1020,6 +1065,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Update cart badge on load
   updateCartBadge();
+
+  // Auto-refresh katalog setiap 60 detik (sinkronisasi aset baru dari admin)
+  setInterval(() => {
+    if (currentPage === 'katalog' || currentPage === 'beranda') {
+      refreshCatalog();
+    }
+  }, 60000);
 });
 
 

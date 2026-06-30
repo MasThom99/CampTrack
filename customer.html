@@ -205,8 +205,15 @@
     <!-- PAGE: KATALOG -->
     <section class="page" id="page-katalog">
       <div class="page-top">
-        <h2 class="page-title"><i class="ti ti-backpack"></i> Katalog Alat Kemping</h2>
-        <p class="page-sub">Temukan peralatan terbaik untuk petualangan Anda</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+          <div>
+            <h2 class="page-title"><i class="ti ti-backpack"></i> Katalog Alat Kemping</h2>
+            <p class="page-sub">Temukan peralatan terbaik untuk petualangan Anda</p>
+          </div>
+          <button class="btn-refresh-catalog" onclick="refreshCatalog()" id="btn-refresh-catalog">
+            <i class="ti ti-refresh"></i> Refresh
+          </button>
+        </div>
       </div>
 
       <!-- SEARCH & FILTER BAR -->
